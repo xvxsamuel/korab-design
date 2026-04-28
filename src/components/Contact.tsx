@@ -11,8 +11,8 @@ export default function Contact() {
           <span className="contact-arrow" aria-hidden="true">→</span>
         </a>
         <p className="contact-note">
-          Open to full-time roles and select freelance work.<br />
-          Based in The Hague, NL — available remotely.
+          Open to full-time roles and freelance work.<br />
+          Available on-site and remotely.
         </p>
       </div>
     </section>

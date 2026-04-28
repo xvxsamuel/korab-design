@@ -11,9 +11,10 @@ const SUN_PATH = [
   { t: 1.0,  x: 8,  y: 72 },
 ] as const;
 
-const STAR_ARC_SCALE   = 0.75;
-const RING_B_SCALE     = 0.55;  // second ring radius as fraction of main
-const RING_B_ARC_SCALE = 0.75;
+const STAR_ARC_SCALE      = 0.75;
+const RING_B_SCALE        = 0.55;   // second ring radius as fraction of main
+const RING_B_ARC_SCALE    = 0.75;
+const RING_B_START_OFFSET = 0.5;   // radians: negative = further up/right on the ring
 
 const SHELL_BASE = 100;
 
@@ -62,12 +63,9 @@ export function useSunAnimation() {
     let starNatVX   = 0;
     let starNatDocY = 0;
 
-    // Second star — same natural origin as main, smaller radius, mirrored above
-    let ringRadiusB  = 0;
-    let startAngleB  = 0;
-    let endAngleB    = 0;
-    let starBNatVX   = 0;
-    let starBNatDocY = 0;
+    let ringRadiusB = 0;
+    let startAngleB = 0;
+    let endAngleB   = 0;
 
     const setRingStroke = () => {
       if (ringRadius > 0) {
@@ -93,11 +91,11 @@ export function useSunAnimation() {
       const tgtVY    = sunVY + ringRadius  * Math.sin(angle);
       starEl.style.transform  = `translate(${tgtVX - starNatVX}px,  ${tgtVY - starNatDocY  + scrollY}px)`;
 
-      // Second star — same doc-space translate math, smaller ring, goes upward
-      const angleB   = lerp(startAngleB, endAngleB, Math.min(p * RING_B_ARC_SCALE, 1));
-      const tgtBVX   = sunVX + ringRadiusB * Math.cos(angleB);
-      const tgtBVY   = sunVY + ringRadiusB * Math.sin(angleB);
-      starElB.style.transform = `translate(${tgtBVX - starBNatVX}px, ${tgtBVY - starBNatDocY + scrollY}px)`;
+      // Second star — position: fixed, pure viewport coords
+      const angleB = lerp(startAngleB, endAngleB, Math.min(p * RING_B_ARC_SCALE, 1));
+      const tgtBVX = sunVX + ringRadiusB * Math.cos(angleB);
+      const tgtBVY = sunVY + ringRadiusB * Math.sin(angleB);
+      starElB.style.transform = `translate(${tgtBVX}px, ${tgtBVY}px) translate(-50%, -50%)`;
     };
 
     const init = (isResize = false) => {
@@ -119,6 +117,7 @@ export function useSunAnimation() {
         gsap.to(sunEl,    { opacity: 1, duration: 1.0, ease: 'power2.out', delay: 0.3 });
         gsap.to(orbitEl,  { opacity: 1, duration: 1.2, ease: 'power2.out', delay: 0.4 });
         gsap.to(orbitElB, { opacity: 1, duration: 1.2, ease: 'power2.out', delay: 0.5 });
+        gsap.to(starElB,  { opacity: 1, duration: 1.0, ease: 'power2.out', delay: 0.5 });
       }
 
       // Measure main star natural position (clear transforms first)
@@ -138,12 +137,8 @@ export function useSunAnimation() {
       // Main star: angle from sun to star
       startAngle = Math.atan2(starNatVY - sunStartVY, starNatVX - sunStartVX);
 
-      // Second star: exact same angle but negated Y → mirrors above the sun
-      startAngleB = Math.atan2(-(starNatVY - sunStartVY), starNatVX - sunStartVX);
-
-      // Second star's t=0 position on its ring (derived, not measured from DOM)
-      starBNatVX   = sunStartVX + ringRadiusB * Math.cos(startAngleB);
-      starBNatDocY = sunStartVY + ringRadiusB * Math.sin(startAngleB) + window.scrollY;
+      // Second star: mirrored above, shifted along ring by offset
+      startAngleB = Math.atan2(-(starNatVY - sunStartVY), starNatVX - sunStartVX) + RING_B_START_OFFSET;
 
       setRingStroke();
 

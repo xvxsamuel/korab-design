@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import Background from './components/Background';
+import Sun from './components/Sun';
 import Cursor from './components/Cursor';
 import Nav from './components/Nav';
 import Hero from './components/Hero';
@@ -63,6 +64,11 @@ export default function App() {
       <svg className="sun-orbit sun-orbit-b" viewBox="-100 -100 200 200" aria-hidden="true">
         <circle className="sun-orbit-ring sun-orbit-ring-b" cx="0" cy="0" r="99" />
       </svg>
+      <div className="hero-sun-b" aria-hidden="true">
+        <span className="brand-orbit-body brand-orbit-body-b">
+          <Sun size={32} className="sun-inline" style={{ color: 'var(--accent)' }} />
+        </span>
+      </div>
 
 
       <Cursor />

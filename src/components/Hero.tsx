@@ -12,11 +12,6 @@ export default function Hero() {
                 <Sun className="sun-inline" />
               </span>
             </span>
-            <span className="hero-sun hero-sun-b" aria-hidden="true">
-              <span className="brand-orbit-body brand-orbit-body-b">
-                <Sun className="sun-inline" />
-              </span>
-            </span>
             Korab
           </span>
         </h1>

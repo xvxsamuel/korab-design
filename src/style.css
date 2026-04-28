@@ -270,23 +270,17 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
 .sun-orbit-b { opacity: 0; }
 .sun-orbit-ring-b { stroke: rgba(68, 91, 75, 0.15); }
 
-/* Second star — zero-width inline so it doesn't affect layout, JS drives position */
+/* Second star — fixed, pure viewport-space, JS positions it */
 .hero-sun-b {
-  display: inline-block;
-  width: 0;
-  height: 0;
-  overflow: visible;
-  vertical-align: middle;
+  position: fixed;
+  left: 0; top: 0;
+  width: 32px; height: 32px;
   pointer-events: none;
-  color: var(--accent);
-  will-change: transform;
+  z-index: 2;
+  opacity: 0;
+  will-change: transform, opacity;
 }
-.hero-sun-b .brand-orbit-body {
-  width: calc(0.78em * 0.55);
-  height: calc(0.78em * 0.55);
-  animation-duration: 50s;
-  transform-origin: center;
-}
+.brand-orbit-body-b { animation-duration: 50s; }
 
 /* Spinning icon shared by nav brand and hero star -------------------- */
 
