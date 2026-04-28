@@ -11,10 +11,15 @@ const SUN_PATH = [
   { t: 1.0,  x: 8,  y: 72 },
 ] as const;
 
-const STAR_ARC_SCALE      = 0.75;
-const RING_B_SCALE        = 0.55;   // second ring radius as fraction of main
-const RING_B_ARC_SCALE    = 0.75;
-const RING_B_START_OFFSET = 0.5;   // radians: negative = further up/right on the ring
+// Fraction of the full arc each star travels by the time you reach the bottom.
+const STAR_ARC_SCALE   = 0.75;
+const STAR_B_ARC_SCALE = 0.5;
+// Second ring radius as a fraction of the main ring radius.
+const RING_B_SCALE   = 0.65;
+// Second star size relative to the first star.
+const STAR_B_SIZE    = 0.65;
+// Extra angle (radians) added to star B's start — negative rotates it higher on its arc.
+const STAR_B_START_OFFSET = -Math.PI * -0.25;
 
 const SHELL_BASE = 100;
 
@@ -33,6 +38,16 @@ function sampleSun(p: number): { x: number; y: number } {
   return { x: SUN_PATH[SUN_PATH.length - 1].x, y: SUN_PATH[SUN_PATH.length - 1].y };
 }
 
+// Place a fixed star at viewport coords (vx, vy), centered.
+function placeStar(el: HTMLElement, vx: number, vy: number) {
+  el.style.transform = `translate(${vx}px, ${vy}px) translate(-50%, -50%)`;
+}
+
+// Center an orbit ring SVG at viewport coords (vx, vy) with pixel radius r.
+function placeRing(el: SVGElement, vx: number, vy: number, r: number) {
+  el.style.transform = `translate(${vx}px, ${vy}px) translate(-50%, -50%) scale(${r / SHELL_BASE})`;
+}
+
 export function useSunAnimation() {
   useLayoutEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -49,53 +64,40 @@ export function useSunAnimation() {
     const orbitRing  = document.querySelector<SVGCircleElement>('.sun-orbit-ring:not(.sun-orbit-ring-b)')!;
     const orbitElB   = document.querySelector<SVGElement>('.sun-orbit-b')!;
     const orbitRingB = document.querySelector<SVGCircleElement>('.sun-orbit-ring-b')!;
-    const starEl     = document.querySelector<HTMLElement>('.hero-sun:not(.hero-sun-b)')!;
-    const starElB    = document.querySelector<HTMLElement>('.hero-sun-b')!;
+    const starElA    = document.querySelector<HTMLElement>('.star-a')!;
+    const starElB    = document.querySelector<HTMLElement>('.star-b')!;
+    const placeholder = document.querySelector<HTMLElement>('.hero-sun-placeholder')!;
 
     let vw = window.innerWidth;
     let vh = window.innerHeight;
     let savedProgress = 0;
 
-    // Main star — measured at init
     let ringRadius  = 0;
-    let startAngle  = 0;
-    let endAngle    = 0;
-    let starNatVX   = 0;
-    let starNatDocY = 0;
-
     let ringRadiusB = 0;
+    let startAngleA = 0;
     let startAngleB = 0;
+    let endAngleA   = 0;
     let endAngleB   = 0;
 
-    const setRingStroke = () => {
-      if (ringRadius > 0) {
-        orbitRing.setAttribute('stroke-width', String(SHELL_BASE / ringRadius));
-        orbitRingB.setAttribute('stroke-width', String(SHELL_BASE / ringRadiusB));
-      }
-    };
-
     const apply = (p: number) => {
-      const scrollY = window.scrollY;
       const { x, y } = sampleSun(p);
       const sunVX = (x / 100) * vw;
       const sunVY = (y / 100) * vh;
 
-      const t = `translate(${sunVX}px, ${sunVY}px) translate(-50%, -50%)`;
-      sunEl.style.transform    = t;
-      orbitEl.style.transform  = `${t} scale(${ringRadius  / SHELL_BASE})`;
-      orbitElB.style.transform = `${t} scale(${ringRadiusB / SHELL_BASE})`;
+      sunEl.style.transform = `translate(${sunVX}px, ${sunVY}px) translate(-50%, -50%)`;
+      placeRing(orbitEl,  sunVX, sunVY, ringRadius);
+      placeRing(orbitElB, sunVX, sunVY, ringRadiusB);
 
-      // Main star — doc-space translate
-      const angle    = lerp(startAngle,  endAngle,  Math.min(p * STAR_ARC_SCALE,   1));
-      const tgtVX    = sunVX + ringRadius  * Math.cos(angle);
-      const tgtVY    = sunVY + ringRadius  * Math.sin(angle);
-      starEl.style.transform  = `translate(${tgtVX - starNatVX}px,  ${tgtVY - starNatDocY  + scrollY}px)`;
+      const fracA = Math.min(p * STAR_ARC_SCALE,   1);
+      const fracB = Math.min(p * STAR_B_ARC_SCALE, 1);
 
-      // Second star — position: fixed, pure viewport coords
-      const angleB = lerp(startAngleB, endAngleB, Math.min(p * RING_B_ARC_SCALE, 1));
-      const tgtBVX = sunVX + ringRadiusB * Math.cos(angleB);
-      const tgtBVY = sunVY + ringRadiusB * Math.sin(angleB);
-      starElB.style.transform = `translate(${tgtBVX}px, ${tgtBVY}px) translate(-50%, -50%)`;
+      // Star A: moves downward along main ring
+      const angleA = lerp(startAngleA, endAngleA, fracA);
+      placeStar(starElA, sunVX + ringRadius  * Math.cos(angleA), sunVY + ringRadius  * Math.sin(angleA));
+
+      // Star B: moves upward along smaller ring (mirrored Y angle)
+      const angleB = lerp(startAngleB, endAngleB, fracB);
+      placeStar(starElB, sunVX + ringRadiusB * Math.cos(angleB), sunVY + ringRadiusB * Math.sin(angleB));
     };
 
     const init = (isResize = false) => {
@@ -105,64 +107,64 @@ export function useSunAnimation() {
       const s0 = sampleSun(0);
       const sunStartVX = (s0.x / 100) * vw;
       const sunStartVY = (s0.y / 100) * vh;
-      const initT = `translate(${sunStartVX}px, ${sunStartVY}px) translate(-50%, -50%)`;
 
       if (!isResize) {
-        sunEl.style.transform    = initT;
-        orbitEl.style.transform  = initT;
-        orbitElB.style.transform = initT;
-        sunEl.style.opacity      = '0';
-        orbitEl.style.opacity    = '0';
-        orbitElB.style.opacity   = '0';
+        const initT = `translate(${sunStartVX}px, ${sunStartVY}px) translate(-50%, -50%)`;
+        sunEl.style.transform   = initT;
+        orbitEl.style.opacity   = '0';
+        orbitElB.style.opacity  = '0';
+        sunEl.style.opacity     = '0';
+        starElA.style.opacity   = '0';
+        starElB.style.opacity   = '0';
         gsap.to(sunEl,    { opacity: 1, duration: 1.0, ease: 'power2.out', delay: 0.3 });
         gsap.to(orbitEl,  { opacity: 1, duration: 1.2, ease: 'power2.out', delay: 0.4 });
         gsap.to(orbitElB, { opacity: 1, duration: 1.2, ease: 'power2.out', delay: 0.5 });
+        gsap.to(starElA,  { opacity: 1, duration: 1.0, ease: 'power2.out', delay: 0.3 });
         gsap.to(starElB,  { opacity: 1, duration: 1.0, ease: 'power2.out', delay: 0.5 });
       }
 
-      // Measure main star natural position (clear transforms first)
-      starEl.style.transform  = '';
-      starElB.style.transform = '';
-      const sr  = starEl.getBoundingClientRect();
-      const row = starEl.closest('.row') as HTMLElement | null;
-      const rr  = row ? row.getBoundingClientRect() : sr;
+      // Measure the placeholder to get star A's start position and size
+      const ph = placeholder.getBoundingClientRect();
+      const starVX = ph.left + ph.width  / 2;
+      const starVY = ph.top  + ph.height / 2;
 
-      starNatVX   = sr.left + sr.width  / 2;
-      const starNatVY = rr.top + rr.height / 2;
-      starNatDocY = starNatVY + window.scrollY;
+      // Size stars from placeholder (star B is STAR_B_SIZE times larger)
+      starElA.style.width  = `${ph.width}px`;
+      starElA.style.height = `${ph.height}px`;
+      starElB.style.width  = `${ph.width * STAR_B_SIZE}px`;
+      starElB.style.height = `${ph.height * STAR_B_SIZE}px`;
 
-      ringRadius  = Math.hypot(sunStartVX - starNatVX, sunStartVY - starNatVY);
+      ringRadius  = Math.hypot(sunStartVX - starVX, sunStartVY - starVY);
       ringRadiusB = ringRadius * RING_B_SCALE;
 
-      // Main star: angle from sun to star
-      startAngle = Math.atan2(starNatVY - sunStartVY, starNatVX - sunStartVX);
+      // Star A starts where the placeholder is (below sun)
+      startAngleA = Math.atan2(starVY - sunStartVY, starVX - sunStartVX);
+      // Star B starts mirrored above (negate Y delta), offset further toward the top
+      startAngleB = Math.atan2(-(starVY - sunStartVY), starVX - sunStartVX) + STAR_B_START_OFFSET;
 
-      // Second star: mirrored above, shifted along ring by offset
-      startAngleB = Math.atan2(-(starNatVY - sunStartVY), starNatVX - sunStartVX) + RING_B_START_OFFSET;
+      // Update ring stroke widths so they look the same weight visually
+      orbitRing.setAttribute('stroke-width',  String(SHELL_BASE / ringRadius));
+      orbitRingB.setAttribute('stroke-width', String(SHELL_BASE / ringRadiusB));
 
-      setRingStroke();
-
-      // End angles: measure contact title position at full scroll
+      // Compute end angles: where each star lands at the contact section
       const totalScroll = document.documentElement.scrollHeight - vh;
       const contactEl   = document.getElementById('contact');
       const titleEl     = contactEl?.querySelector<HTMLElement>('.section-title') ?? contactEl;
 
       if (titleEl) {
         const tr = titleEl.getBoundingClientRect();
-        const titleDocTop  = tr.top  + window.scrollY;
-        const titleDocLeft = tr.left + window.scrollX;
-        const targetVX  = titleDocLeft;
-        const targetVY  = titleDocTop - totalScroll;
+        // Title's viewport position when fully scrolled to bottom
+        const targetVX = tr.left + window.scrollX;
+        const targetVY = tr.top  + window.scrollY - totalScroll;
 
         const s1 = sampleSun(1);
         const sunEndVX = (s1.x / 100) * vw;
         const sunEndVY = (s1.y / 100) * vh;
 
-        // Main star ends at contact title; second star mirrors above
-        endAngle  = Math.atan2( (targetVY - sunEndVY), targetVX - sunEndVX);
+        endAngleA = Math.atan2( (targetVY - sunEndVY), targetVX - sunEndVX);
         endAngleB = Math.atan2(-(targetVY - sunEndVY), targetVX - sunEndVX);
       } else {
-        endAngle  = startAngle  + Math.PI;
+        endAngleA = startAngleA + Math.PI;
         endAngleB = startAngleB + Math.PI;
       }
 

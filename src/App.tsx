@@ -59,14 +59,19 @@ export default function App() {
 
       <div className="sun-trace" aria-hidden="true" />
       <svg className="sun-orbit" viewBox="-100 -100 200 200" aria-hidden="true">
-        <circle className="sun-orbit-ring" cx="0" cy="0" r="99" />
+        <circle className="sun-orbit-ring" cx="0" cy="0" r="100" />
       </svg>
       <svg className="sun-orbit sun-orbit-b" viewBox="-100 -100 200 200" aria-hidden="true">
-        <circle className="sun-orbit-ring sun-orbit-ring-b" cx="0" cy="0" r="99" />
+        <circle className="sun-orbit-ring sun-orbit-ring-b" cx="0" cy="0" r="100" />
       </svg>
-      <div className="hero-sun-b" aria-hidden="true">
+      <div className="star-a" aria-hidden="true">
+        <span className="brand-orbit-body">
+          <Sun className="sun-inline" />
+        </span>
+      </div>
+      <div className="star-b" aria-hidden="true">
         <span className="brand-orbit-body brand-orbit-body-b">
-          <Sun size={32} className="sun-inline" style={{ color: 'var(--accent)' }} />
+          <Sun className="sun-inline" />
         </span>
       </div>
 
