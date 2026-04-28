@@ -5,9 +5,9 @@ type NavProps = {
 };
 
 const links = [
-  { id: 'home', label: 'home' },
-  { id: 'works', label: 'works' },
-  { id: 'about', label: 'about' }
+  { id: 'home',    label: 'home' },
+  { id: 'works',   label: 'works' },
+  { id: 'about',   label: 'about' },
 ];
 
 export default function Nav({ active }: NavProps) {
@@ -18,10 +18,7 @@ export default function Nav({ active }: NavProps) {
 
   return (
     <nav className="nav" aria-label="primary">
-      {/* orbit-anchor marks this mark as a body on the shared orbit
-          (see .sun-orbit in App.tsx) — the ring is drawn globally, not
-          per-anchor, so both suns share a single circle. */}
-      <span className="brand-orbit orbit-anchor" aria-hidden="true">
+      <span className="brand-orbit" aria-hidden="true">
         <span className="brand-orbit-body">
           <Sun size={40} className="brand-mark" />
         </span>
@@ -35,9 +32,24 @@ export default function Nav({ active }: NavProps) {
             onClick={(e) => go(e, id)}
             aria-current={active === id ? 'page' : undefined}
           >
-            {label}
+            <span className="nav-label-base">{label}</span>
+            <span className="nav-label-alt" aria-hidden="true">{label}</span>
           </a>
         ))}
+        <a
+          href="#contact"
+          className={`nav-contact${active === 'contact' ? ' active' : ''}`}
+          onClick={(e) => go(e, 'contact')}
+          aria-current={active === 'contact' ? 'page' : undefined}
+        >
+          <span className="nav-label-base nav-contact-base" aria-hidden="true">
+            {'contact'.split('').map((ch, i) => (
+              <span key={i} className="nav-contact-char" style={{ '--i': i } as React.CSSProperties}>{ch}</span>
+            ))}
+          </span>
+          <span className="nav-label-alt nav-contact-alt" aria-hidden="true">let's talk</span>
+          <span className="sr-only">contact</span>
+        </a>
       </div>
     </nav>
   );

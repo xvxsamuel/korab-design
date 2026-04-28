@@ -7,17 +7,19 @@ export default function Hero() {
         <h1 className="hero-name">
           <span className="row row1">Samuel</span>
           <span className="row row2">
-            <span className="hero-sun orbit-anchor" aria-hidden="true">
+            <span className="hero-sun" aria-hidden="true">
               <span className="brand-orbit-body">
+                <Sun className="sun-inline" />
+              </span>
+            </span>
+            <span className="hero-sun hero-sun-b" aria-hidden="true">
+              <span className="brand-orbit-body brand-orbit-body-b">
                 <Sun className="sun-inline" />
               </span>
             </span>
             Korab
           </span>
         </h1>
-        <div className="hero-meta">
-          <span>Product &amp; interface design, The Hague</span>
-        </div>
       </div>
     </section>
   );

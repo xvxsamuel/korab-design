@@ -9,11 +9,10 @@ type Project = {
 };
 
 const projects: Project[] = [
-  { n: '01', name: 'Polder', role: 'Banking',  tags: 'Fintech · Mobile',  year: '2025' },
-  { n: '02', name: 'Lumen',  role: 'Studio',   tags: 'Brand · Identity',  year: '2025' },
-  { n: '03', name: 'Hinge',  role: 'Health',   tags: 'Web · Systems',     year: '2024' },
-  { n: '04', name: 'Field',  role: 'Notes',    tags: 'Editorial · Web',   year: '2024' },
-  { n: '05', name: 'Atlas',  role: 'Travel',   tags: 'iOS · Research',    year: '2023' }
+  { n: '01', name: 'Korabova & Lovich', role: 'Law Firm',  tags: 'UX Research · Brand Identity · Web',  year: '2026' },
+  { n: '02', name: 'ARAM PIG',  role: 'Data Analytics Website',   tags: 'Data Science · Development · Gaming · Web',  year: '2026' },
+  { n: '03', name: 'Veracity',  role: 'AI Startup',   tags: 'Product Design · Brand Identity · Web Extension',     year: '2026' },
+  { n: '04', name: "Oma's Pantry",  role: 'Online Store',    tags: 'UX Research · Web · Ecommerce',   year: '2025' },
 ];
 
 export default function Works() {
