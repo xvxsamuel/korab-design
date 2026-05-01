@@ -121,6 +121,12 @@ export function useSunAnimation() {
     };
     window.addEventListener('sun:panel-offset', onPanelOffset);
 
+    const onFreeze = () => {
+      panelOffsetPx = 0;
+      reapply();
+    };
+    window.addEventListener('sun:freeze', onFreeze);
+
     let rafId = 0;
     let lastSy = -1;
     let lastOffset = -1;
@@ -157,10 +163,12 @@ export function useSunAnimation() {
         gsap.to(starElB,  { opacity: 1, duration: 1.0, ease: 'power2.out', delay: 0.5 });
       }
 
-      // Measure the placeholder to get star A's start position and size
+      // Measure the placeholder to get star A's start position and size.
+      // getBoundingClientRect() is viewport-relative, so adjust for scroll to get
+      // the document-Y, which equals the viewport-Y at scroll=0 (where sunStart is defined).
       const ph = placeholder.getBoundingClientRect();
       const starVX = ph.left + ph.width  / 2;
-      const starVY = ph.top  + ph.height / 2;
+      const starVY = (ph.top + window.scrollY) + ph.height / 2;
 
       // Size stars from placeholder (star B is STAR_B_SIZE times larger)
       starElA.style.width  = `${ph.width}px`;
@@ -182,6 +190,7 @@ export function useSunAnimation() {
 
       // Compute end angles: where each star lands at the contact section
       const totalScroll = document.documentElement.scrollHeight - vh;
+      cachedBaseMax = totalScroll;
       const contactEl   = document.getElementById('contact');
       const titleEl     = contactEl?.querySelector<HTMLElement>('.section-title') ?? contactEl;
 
@@ -203,7 +212,7 @@ export function useSunAnimation() {
       }
 
       if (isResize) reapply();
-      else apply(0);
+      else apply(computeProgress());
     };
 
     init(false);
@@ -221,6 +230,7 @@ export function useSunAnimation() {
       clearTimeout(resizeTimer);
       cancelAnimationFrame(rafId);
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('sun:panel-offset', onPanelOffset);
       window.removeEventListener('sun:freeze', onFreeze);
     };
   }, []);

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 
-import Background from './components/Background';
 import Star from './assets/star.svg?react';
 import Cursor from './components/Cursor';
 import Nav from './components/Nav';
@@ -55,8 +54,6 @@ export default function App() {
 
   return (
     <>
-      <Background />
-
       <div className="sun-trace" aria-hidden="true" />
       <svg className="sun-orbit" viewBox="-100 -100 200 200" aria-hidden="true">
         <circle className="sun-orbit-ring" cx="0" cy="0" r="100" />

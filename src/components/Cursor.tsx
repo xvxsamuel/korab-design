@@ -30,24 +30,23 @@ export default function Cursor() {
     if (!canHover) return;
     setEnabled(true);
 
-    // Mouse target (viewport coords)
     let mx = -200, my = -200;
-
-    // Nav pill target — null when not hovering a nav link
     let pillTarget: { x: number; y: number; w: number; h: number } | null = null;
+    // 'nav' keeps cursor behind fixed nav (z-index 39 < nav 40)
+    // 'email' uses z-index auto so <main> content always paints on top
+    let pillKind: 'nav' | 'email' | null = null;
+    // live reference to the hovered email element so we can re-read its rect each frame
+    let hoveredEmail: HTMLElement | null = null;
 
-    // Lerped state — all in viewport coords, top-left origin
     let cx = mx - DOT_SIZE / 2;
     let cy = my - DOT_SIZE / 2;
     let cw = DOT_SIZE;
     let ch = DOT_SIZE;
-    let cr = DOT_SIZE / 2; // border-radius
-    let ct = 0; // 0 = dot, 1 = pill (color blend)
+    let cr = DOT_SIZE / 2;
+    let ct = 0;
 
     let raf = 0;
     let running = false;
-
-    const NAV_SELECTOR = '.nav-links a';
 
     const getTarget = (): Target => {
       if (pillTarget) return { kind: 'pill', ...pillTarget };
@@ -55,13 +54,18 @@ export default function Cursor() {
     };
 
     const tick = () => {
+      // Keep pill target in sync with the email element as its chevron expands
+      if (pillKind === 'email' && hoveredEmail) {
+        const r = hoveredEmail.getBoundingClientRect();
+        pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
+      }
+
       const target = getTarget();
       const speed = target.kind === 'pill' ? LERP_PILL : LERP_DOT;
 
       let tx: number, ty: number, tw: number, th: number, tr: number, tt: number;
 
       if (target.kind === 'dot') {
-        // Center the dot on cursor
         tx = target.x - DOT_SIZE / 2;
         ty = target.y - DOT_SIZE / 2;
         tw = DOT_SIZE;
@@ -92,9 +96,20 @@ export default function Cursor() {
         el.style.height = `${ch}px`;
         el.style.borderRadius = `${cr}px`;
         el.style.background = lerpColor(INK, ACCENT, ct);
-        // sit below nav text when in pill mode, above everything in dot mode
-        el.style.zIndex = ct > 0.5 ? '39' : '1000';
-        el.style.mixBlendMode = ct < 0.5 ? 'multiply' : 'normal';
+
+        // email pill: z-index auto so <main> (later in DOM) always paints on top
+        // nav pill:   z-index 39 so it sits below the fixed nav at z-index 40
+        // dot mode:   z-index 1000 so the dot is always visible
+        if (pillKind === 'email') {
+          el.style.zIndex = 'auto';
+          el.style.mixBlendMode = 'normal';
+        } else if (ct > 0.5) {
+          el.style.zIndex = '39';
+          el.style.mixBlendMode = 'normal';
+        } else {
+          el.style.zIndex = '1000';
+          el.style.mixBlendMode = 'multiply';
+        }
       }
 
       const settled =
@@ -123,21 +138,37 @@ export default function Cursor() {
     };
 
     const onOver = (e: PointerEvent) => {
-      const navLink = (e.target as Element | null)?.closest<HTMLElement>(NAV_SELECTOR);
+      const el = (e.target as Element | null);
+      const navLink  = el?.closest<HTMLElement>('.nav-links a');
+      const emailLink = el?.closest<HTMLElement>('.contact-email');
+
       if (navLink) {
         const r = navLink.getBoundingClientRect();
         pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
+        pillKind = 'nav';
+        hoveredEmail = null;
+      } else if (emailLink) {
+        const r = emailLink.getBoundingClientRect();
+        pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
+        pillKind = 'email';
+        hoveredEmail = emailLink;
       } else {
         pillTarget = null;
+        pillKind = null;
+        hoveredEmail = null;
       }
       schedule();
     };
 
     const recompute = () => {
-      const hovered = document.querySelector<HTMLElement>(`${NAV_SELECTOR}:hover`);
+      const navHovered   = document.querySelector<HTMLElement>('.nav-links a:hover');
+      const emailHovered = document.querySelector<HTMLElement>('.contact-email:hover');
+      const hovered = navHovered ?? emailHovered;
       if (hovered) {
         const r = hovered.getBoundingClientRect();
         pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
+        pillKind = navHovered ? 'nav' : 'email';
+        hoveredEmail = emailHovered ?? null;
         schedule();
       }
     };
@@ -158,11 +189,5 @@ export default function Cursor() {
 
   if (!enabled) return null;
 
-  return (
-    <div
-      ref={ref}
-      className="cursor"
-      aria-hidden="true"
-    />
-  );
+  return <div ref={ref} className="cursor" aria-hidden="true" />;
 }
