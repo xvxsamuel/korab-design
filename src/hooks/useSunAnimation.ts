@@ -1,8 +1,5 @@
 import { useLayoutEffect } from 'react';
 import gsap from 'gsap';
-import ScrollTrigger from 'gsap/ScrollTrigger';
-
-gsap.registerPlugin(ScrollTrigger);
 
 const SUN_PATH = [
   { t: 0.0,  x: 92, y: 72 },
@@ -70,7 +67,6 @@ export function useSunAnimation() {
 
     let vw = window.innerWidth;
     let vh = window.innerHeight;
-    let savedProgress = 0;
 
     let ringRadius  = 0;
     let ringRadiusB = 0;
@@ -98,6 +94,44 @@ export function useSunAnimation() {
       // Star B: moves upward along smaller ring (mirrored Y angle)
       const angleB = lerp(startAngleB, endAngleB, fracB);
       placeStar(starElB, sunVX + ringRadiusB * Math.cos(angleB), sunVY + ringRadiusB * Math.sin(angleB));
+    };
+
+    // Panel-aware mapping: progress = (scrollY - panelOffsetPx) / cachedBaseMax.
+    // cachedBaseMax is captured once at init (no panel open). panelOffsetPx is
+    // dispatched by the Works component each scroll while a panel is open and
+    // equals how much of the panel sits above the user's scroll. The sun
+    // pauses through the panel zone but is mathematically invariant under
+    // both the panel CSS transition AND the snap-close + scroll-comp — so
+    // open/close never cause sun motion of any kind.
+    let cachedBaseMax = 0;
+    let panelOffsetPx = 0;
+
+    const computeProgress = () => {
+      if (cachedBaseMax <= 0) return 0;
+      const eff = Math.max(0, Math.min(cachedBaseMax, window.scrollY - panelOffsetPx));
+      return eff / cachedBaseMax;
+    };
+
+    const reapply = () => apply(computeProgress());
+
+    const onPanelOffset = (e: Event) => {
+      const detail = (e as CustomEvent<number>).detail;
+      panelOffsetPx = typeof detail === 'number' ? Math.max(0, detail) : 0;
+      reapply();
+    };
+    window.addEventListener('sun:panel-offset', onPanelOffset);
+
+    let rafId = 0;
+    let lastSy = -1;
+    let lastOffset = -1;
+    const tick = () => {
+      const sy = window.scrollY;
+      if (sy !== lastSy || panelOffsetPx !== lastOffset) {
+        lastSy = sy;
+        lastOffset = panelOffsetPx;
+        apply(computeProgress());
+      }
+      rafId = requestAnimationFrame(tick);
     };
 
     const init = (isResize = false) => {
@@ -168,22 +202,12 @@ export function useSunAnimation() {
         endAngleB = startAngleB + Math.PI;
       }
 
-      ScrollTrigger.getAll().forEach(st => st.kill());
-      apply(isResize ? savedProgress : 0);
-
-      ScrollTrigger.create({
-        trigger: document.documentElement,
-        start: 'top top',
-        end: 'bottom bottom',
-        scrub: true,
-        onUpdate: (self) => {
-          savedProgress = self.progress;
-          apply(self.progress);
-        },
-      });
+      if (isResize) reapply();
+      else apply(0);
     };
 
     init(false);
+    rafId = requestAnimationFrame(tick);
 
     let resizeTimer: ReturnType<typeof setTimeout>;
     const onResize = () => {
@@ -195,8 +219,9 @@ export function useSunAnimation() {
 
     return () => {
       clearTimeout(resizeTimer);
+      cancelAnimationFrame(rafId);
       window.removeEventListener('resize', onResize);
-      ScrollTrigger.getAll().forEach(st => st.kill());
+      window.removeEventListener('sun:freeze', onFreeze);
     };
   }, []);
 }

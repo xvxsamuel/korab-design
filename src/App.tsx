@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import Background from './components/Background';
-import Sun from './components/Sun';
+import Star from './assets/star.svg?react';
 import Cursor from './components/Cursor';
 import Nav from './components/Nav';
 import Hero from './components/Hero';
@@ -66,12 +66,12 @@ export default function App() {
       </svg>
       <div className="star-a" aria-hidden="true">
         <span className="brand-orbit-body">
-          <Sun className="sun-inline" />
+          <Star className="sun-inline" />
         </span>
       </div>
       <div className="star-b" aria-hidden="true">
         <span className="brand-orbit-body brand-orbit-body-b">
-          <Sun className="sun-inline" />
+          <Star className="sun-inline" />
         </span>
       </div>
 

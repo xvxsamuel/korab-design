@@ -20,6 +20,13 @@
   font-display: swap;
 }
 @font-face {
+  font-family: 'DeFonte';
+  src: url('/fonts/DeFonte-DemiGras.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
   font-family: 'Amiamie';
   src: url('/fonts/Amiamie-Regular.otf') format('opentype');
   font-weight: 400;
@@ -59,6 +66,7 @@ body {
   font-family: var(--body);
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.7s var(--ease-soft);
 }
 
 html { overflow-x: clip; }
@@ -108,12 +116,19 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
   width: 40px;
   height: 40px;
   flex-shrink: 0;
+  display: block;
+  text-decoration: none;
 }
 .brand-mark {
   color: var(--accent);
   width: 100%;
   height: 100%;
   display: block;
+  transform: rotate(0deg);
+  transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.brand-orbit:hover .brand-mark {
+  transform: rotate(180deg);
 }
 .nav-links {
   display: flex; gap: 48px;
@@ -130,7 +145,7 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
 }
 
 
-/* original label — slides up & fades out on hover */
+/* original label — slides down & fades out on hover */
 .nav-links a .nav-label-base {
   display: block;
   position: relative;
@@ -138,11 +153,11 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
   transition: transform 0.32s var(--ease-soft), opacity 0.25s ease;
 }
 .nav-links a:hover .nav-label-base {
-  transform: translateY(-110%);
+  transform: translateY(110%);
   opacity: 0;
 }
 
-/* DeFonte label — slides in from below on hover */
+/* DeFonte label — slides in from above on hover */
 .nav-links a .nav-label-alt {
   position: absolute;
   inset: 0;
@@ -153,7 +168,7 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
   font-weight: 500;
   color: var(--ink);
   z-index: 1;
-  transform: translateY(110%);
+  transform: translateY(-110%);
   opacity: 0;
   transition: transform 0.32s var(--ease-soft), opacity 0.25s ease;
 }
@@ -282,6 +297,16 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
 }
 .star-b .brand-orbit-body { animation-duration: 50s; }
 
+/* Smoothing class added during the snap auto-close: the sun is frozen for
+   the freeze window, then released. This class makes its catch-up to natural
+   progress on the next scroll a gentle tween instead of a snap. */
+.sun-trace.is-smoothing,
+.sun-orbit.is-smoothing,
+.star-a.is-smoothing,
+.star-b.is-smoothing {
+  transition: transform 0.4s var(--ease-soft);
+}
+
 /* Spinning icon shared by nav brand and orbit stars ------------------ */
 
 .brand-orbit-body {
@@ -407,8 +432,16 @@ section {
   align-items: baseline;
   padding: 32px 0;
   transition: transform 0.5s var(--ease-soft);
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+  cursor: none;
 }
 .work-row:hover { transform: translateX(10px); }
+.work-row-wrap.is-open .work-row { transform: translateX(10px); }
 .work-main {
   display: grid;
   grid-template-columns: 48px 1fr auto;
@@ -450,8 +483,94 @@ section {
   transition: color 0.3s ease;
 }
 .work-row:hover .num,
-.work-row:hover .year { color: var(--accent); }
+.work-row:hover .year,
+.work-row-wrap.is-open .num,
+.work-row-wrap.is-open .year { color: var(--accent); }
 .rule-row { width: 100%; }
+
+/* Expandable detail panel — fluid height via grid-template-rows trick.
+   Inner content slides + fades using the same ease-soft curve as the navbar. */
+.work-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.7s var(--ease-soft);
+}
+.work-row-wrap.is-open .work-panel { grid-template-rows: 1fr; }
+.work-panel-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+.work-panel-content {
+  padding: 8px 0 64px 88px;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 56px;
+  align-items: start;
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.45s ease 0.08s,
+    transform 0.55s var(--ease-soft) 0.08s;
+}
+.work-row-wrap.is-open .work-panel-content {
+  opacity: 1;
+  transform: translateY(0);
+}
+.work-panel-blurb {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(18px, 1.7vw, 24px);
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  margin: 0 0 20px;
+  max-width: 36ch;
+}
+.work-panel-body {
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  margin: 0 0 28px;
+  max-width: 52ch;
+}
+.work-panel-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, auto));
+  gap: 32px;
+  margin: 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--ink-faint);
+}
+.work-panel-meta dt {
+  font-family: var(--body);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+.work-panel-meta dd {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1.4;
+}
+.work-panel-images {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.work-image-placeholder {
+  aspect-ratio: 4 / 3;
+  background: rgba(68, 91, 75, 0.08);
+  border: 1px solid var(--ink-faint);
+  border-radius: 4px;
+  width: 100%;
+}
+.work-image-placeholder.wide  { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
+.work-image-placeholder.tall  { aspect-ratio: 3 / 4; }
 
 /* About -------------------------------------------------------------- */
 
@@ -515,37 +634,101 @@ section {
 .contact-body {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  align-items: flex-start;
+  text-align: left;
+  gap: 28px;
+  padding-top: 8px;
 }
 .contact-lead {
   font-family: var(--body);
-  font-weight: 500;
-  font-size: clamp(22px, 2.4vw, 32px);
-  letter-spacing: -0.01em;
-  line-height: 1.1;
-  color: var(--ink);
+  font-weight: 400;
+  font-size: clamp(18px, 1.6vw, 22px);
+  letter-spacing: 0;
+  line-height: 1.4;
+  color: var(--ink-soft);
   margin: 0;
 }
 .contact-email {
+  position: relative;
   display: inline-flex;
-  align-items: baseline;
-  gap: 14px;
-  font-family: var(--display);
-  font-weight: 500;
-  font-size: clamp(28px, 3vw, 48px);
-  letter-spacing: -0.01em;
+  align-items: center;
+  gap: 0;
+  font-family: var(--body);
+  font-weight: 400;
+  font-size: clamp(24px, 2.6vw, 40px);
+  letter-spacing: 0;
   color: var(--ink);
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--ink);
+  padding: 0.32em 0.7em;
+  border-radius: 999px;
   width: max-content;
-  transition: color 0.3s ease, border-color 0.3s ease;
+  isolation: isolate;
+  transition: color 0.35s var(--ease-soft);
 }
-.contact-arrow {
+.contact-email::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transform: scale(0.86);
+  opacity: 0;
+  z-index: -1;
+  transition:
+    transform 0.45s var(--ease-soft),
+    opacity 0.32s var(--ease-soft);
+}
+.contact-email:hover { color: var(--ink); }
+.contact-email:hover::before {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.contact-email-text {
+  display: inline-flex;
+  line-height: 1;
+}
+.contact-email-char {
   display: inline-block;
-  transition: transform 0.4s var(--ease-soft);
+  transition: color 0.32s var(--ease-soft);
+  transition-delay: calc(var(--i) * 22ms);
 }
-.contact-email:hover { color: var(--accent); border-color: var(--accent); }
-.contact-email:hover .contact-arrow { transform: translateX(6px); }
+
+/* Dynamic chevron — hidden until hover, slides in dark green */
+.contact-chevron {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  height: 0.7em;
+  flex-shrink: 0;
+  margin-left: 0;
+  color: var(--ink);
+  overflow: visible;
+  transition: width 0.4s var(--ease-soft), margin-left 0.4s var(--ease-soft);
+}
+.contact-email:hover .contact-chevron {
+  width: 0.55em;
+  margin-left: 0.32em;
+}
+
+.contact-chevron-mark {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 0.4em;
+  height: 0.4em;
+  border-top: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  opacity: 0;
+  transform: translate(-0.4em, -50%) rotate(45deg);
+  transition:
+    transform 0.45s var(--ease-soft),
+    opacity 0.32s var(--ease-soft);
+}
+.contact-email:hover .contact-chevron-mark {
+  opacity: 1;
+  transform: translate(0.1em, -50%) rotate(45deg);
+  transition-delay: 0.08s;
+}
 .contact-note {
   font-family: var(--body);
   font-size: 15px;
@@ -591,6 +774,14 @@ footer {
   .work-main { grid-template-columns: 28px 1fr; gap: 18px; padding-right: 20px; }
   .work-row .tags { display: none; }
   .work-row .year { padding-left: 16px; font-size: 12px; }
+  .work-panel-content {
+    grid-template-columns: 1fr;
+    padding: 0 0 40px 0;
+    gap: 28px;
+  }
+  .work-panel-meta { grid-template-columns: 1fr 1fr; gap: 20px; }
+  .work-panel-images { grid-template-columns: 1fr; }
+  .work-image-placeholder.wide { grid-column: auto; }
   .about-body { grid-template-columns: 1fr; gap: 40px; }
   .contact-email { font-size: clamp(22px, 6vw, 36px); }
 }
@@ -612,4 +803,15 @@ footer {
     animation: none !important;
   }
   .sun-trace { opacity: 1 !important; }
+  .contact-email,
+  .contact-email::before,
+  .contact-email-char,
+  .contact-chevron,
+  .contact-chevron-mark {
+    transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease !important;
+    transition-delay: 0s !important;
+  }
+  .contact-email:hover .contact-chevron-mark {
+    transform: translate(0.1em, -50%) rotate(45deg);
+  }
 }

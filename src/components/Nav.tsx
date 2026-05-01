@@ -1,11 +1,10 @@
-import Sun from './Sun';
+import Star from '../assets/star.svg?react';
 
 type NavProps = {
   active: string;
 };
 
 const links = [
-  { id: 'home',    label: 'home' },
   { id: 'works',   label: 'works' },
   { id: 'about',   label: 'about' },
 ];
@@ -18,11 +17,16 @@ export default function Nav({ active }: NavProps) {
 
   return (
     <nav className="nav" aria-label="primary">
-      <span className="brand-orbit" aria-hidden="true">
+      <a
+        href="#home"
+        className="brand-orbit"
+        onClick={(e) => go(e, 'home')}
+        aria-label="Home"
+      >
         <span className="brand-orbit-body">
-          <Sun size={40} className="brand-mark" />
+          <Star width={40} height={40} className="brand-mark" />
         </span>
-      </span>
+      </a>
       <div className="nav-links">
         {links.map(({ id, label }) => (
           <a
