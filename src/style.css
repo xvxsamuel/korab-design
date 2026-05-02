@@ -572,8 +572,8 @@ section {
 
 .about-body {
   display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 80px;
+  grid-template-columns: 200px 1fr;
+  gap: 56px;
   align-items: start;
 }
 .about-lead {
@@ -600,10 +600,10 @@ section {
 }
 .about-img {
   width: 100%;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 2 / 3;
   object-fit: cover;
   object-position: center top;
-  border-radius: 4px;
+  border-radius: 6px;
   display: block;
 }
 
@@ -636,7 +636,8 @@ section {
   font-size: clamp(24px, 2.6vw, 40px);
   letter-spacing: -0.01em;
   color: var(--ink);
-  padding: 0.32em 0.7em;
+  padding: 0.32em 0.7em 0.32em 0.7em;
+  margin-left: -0.7em;
   border-radius: 999px;
   width: max-content;
   transition: color 0.35s var(--ease-soft);
@@ -665,6 +666,11 @@ section {
 .contact-email-text {
   display: inline-flex;
   line-height: 1;
+  transition: transform 0.4s var(--ease-soft);
+}
+.contact-email:hover .contact-email-text {
+  transform: translateX(0.25em);
+  transition-delay: 0.06s;
 }
 .contact-email-char {
   display: inline-block;
@@ -672,42 +678,71 @@ section {
   transition-delay: calc(var(--i) * 22ms);
 }
 
-/* Dynamic chevron — hidden until hover, slides in dark green */
+/* Arrow icon — hidden until hover, slides in from left */
 .contact-chevron {
-  position: relative;
-  display: inline-block;
-  width: 0;
-  height: 0.7em;
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
-  margin-left: 0;
-  color: var(--ink);
-  overflow: visible;
-  transition: width 0.4s var(--ease-soft), margin-left 0.4s var(--ease-soft);
+  width: 0;
+  margin-right: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(-8px);
+  transition:
+    width 0.4s var(--ease-soft),
+    margin-right 0.4s var(--ease-soft),
+    opacity 0.35s var(--ease-soft),
+    transform 0.45s var(--ease-soft);
 }
 .contact-email:hover .contact-chevron {
-  width: 0.55em;
-  margin-left: 0.32em;
+  width: 1em;
+  margin-right: 0.4em;
+  opacity: 1;
+  transform: translateX(0);
+  transition-delay: 0.06s;
+}
+.contact-chevron svg {
+  display: block;
+  flex-shrink: 0;
 }
 
-.contact-chevron-mark {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 0.4em;
-  height: 0.4em;
-  border-top: 3px solid currentColor;
-  border-right: 3px solid currentColor;
-  border-radius: 0 3px 0 0;
-  opacity: 0;
-  transform: translate(-0.4em, -50%) rotate(45deg);
-  transition:
-    transform 0.45s var(--ease-soft),
-    opacity 0.32s var(--ease-soft);
+/* Paths start undrawn */
+.contact-chevron svg path:not(:first-child) {
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
 }
-.contact-email:hover .contact-chevron-mark {
-  opacity: 1;
-  transform: translate(0.1em, -50%) rotate(45deg);
-  transition-delay: 0.08s;
+/* 1. Base line draws — the ground */
+.contact-email:hover .contact-chevron svg path:nth-child(2) {
+  animation: svg-draw 0.16s var(--ease-soft) 0s both;
+}
+/* 2. Icon bounces on impact */
+.contact-email:hover .contact-chevron svg {
+  animation: icon-bounce 0.32s cubic-bezier(0.36, 0.07, 0.19, 0.97) 0.18s both;
+}
+/* 3. Arc traces the trajectory upward */
+.contact-email:hover .contact-chevron svg path:nth-child(3) {
+  animation: svg-draw 0.44s var(--ease-soft) 0.46s both;
+}
+/* 4. Corner arrowhead caps it */
+.contact-email:hover .contact-chevron svg path:nth-child(4) {
+  animation: svg-draw 0.18s var(--ease-soft) 0.88s both;
+}
+
+@keyframes svg-draw {
+  from { stroke-dashoffset: 60; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes icon-bounce {
+  0%   { transform: translateY(2px); }
+  45%  { transform: translateY(-5px); }
+  72%  { transform: translateY(1px); }
+  100% { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contact-chevron svg path:not(:first-child) { stroke-dasharray: none; stroke-dashoffset: 0; }
+  .contact-email:hover .contact-chevron svg path,
+  .contact-email:hover .contact-chevron svg { animation: none; }
 }
 .contact-note {
   font-family: var(--body);
@@ -762,9 +797,9 @@ footer {
   .work-panel-meta { grid-template-columns: 1fr 1fr; gap: 20px; }
   .work-panel-images { grid-template-columns: 1fr; }
   .work-image-placeholder.wide { grid-column: auto; }
-  .about-body { grid-template-columns: 1fr; gap: 40px; }
-  .about-img-wrap { position: static; }
-  .about-img { aspect-ratio: 4 / 3; }
+  .about-body { grid-template-columns: 1fr; gap: 32px; }
+  .about-img-wrap { position: static; max-width: 160px; }
+  .about-img { aspect-ratio: 2 / 3; }
   .contact-email { font-size: clamp(22px, 6vw, 36px); }
 }
 
@@ -788,12 +823,8 @@ footer {
   .contact-email,
   .contact-email::before,
   .contact-email-char,
-  .contact-chevron,
-  .contact-chevron-mark {
+  .contact-chevron {
     transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease !important;
     transition-delay: 0s !important;
-  }
-  .contact-email:hover .contact-chevron-mark {
-    transform: translate(0.1em, -50%) rotate(45deg);
   }
 }

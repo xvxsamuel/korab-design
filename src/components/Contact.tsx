@@ -9,6 +9,14 @@ export default function Contact() {
           Got a project in mind? Let's talk.
         </p>
         <a className="contact-email" href={`mailto:${EMAIL}`}>
+          <span className="contact-chevron" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+              <path d="M10 18h4" />
+              <path d="M3 8a9 9 0 0 1 9 9v1l1.428 -4.285a12 12 0 0 1 6.018 -6.938l.554 -.277" />
+              <path d="M15 6h5v5" />
+            </svg>
+          </span>
           <span className="contact-email-text" aria-hidden="true">
             {EMAIL.split('').map((ch, i) => (
               <span
@@ -21,9 +29,6 @@ export default function Contact() {
             ))}
           </span>
           <span className="sr-only">{EMAIL}</span>
-          <span className="contact-chevron" aria-hidden="true">
-            <span className="contact-chevron-mark" />
-          </span>
         </a>
         <p className="contact-note">
           Open to full-time roles and freelance work.<br />

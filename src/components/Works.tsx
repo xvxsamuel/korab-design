@@ -148,9 +148,15 @@ export default function Works() {
       const max = document.documentElement.scrollHeight - vh;
       const panelTopDoc = r.top + sy;
       const panelBottomDoc = panelTopDoc + r.height;
+      const panelHeight = r.height;
 
-      const pastPanel = sy > panelBottomDoc;
-      const beforePanel = sy + vh < panelTopDoc;
+      // Tell sun animation how much panel height sits above scroll so it
+      // can subtract it from progress — prevents stars freezing at p=1
+      const aboveUser = Math.max(0, Math.min(sy - panelTopDoc, panelHeight));
+      window.dispatchEvent(new CustomEvent('sun:panel-offset', { detail: aboveUser }));
+
+      const pastPanel = sy > panelBottomDoc - vh * 0.3;
+      const beforePanel = sy + vh < panelTopDoc + vh * 0.3;
       const atBottom = sy >= max - 5;
 
       if (pastPanel || beforePanel || atBottom) closeWithComp();
