@@ -173,7 +173,6 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
 .nav-links a:hover .nav-label-base {
   transform: translateY(110%);
   opacity: 0;
-  transition-delay: 0.1s;
 }
 
 /* DeFonte label — slides in from above on hover */
@@ -194,7 +193,6 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
 .nav-links a:hover .nav-label-alt {
   transform: translateY(0);
   opacity: 1;
-  transition-delay: 0.1s;
 }
 
 /* contact button in nav */
