@@ -1,5 +1,3 @@
-import Star from '../assets/star.svg?react';
-
 type NavProps = {
   active: string;
 };
@@ -17,16 +15,6 @@ export default function Nav({ active }: NavProps) {
 
   return (
     <nav className="nav" aria-label="primary">
-      <a
-        href="#home"
-        className="brand-orbit"
-        onClick={(e) => go(e, 'home')}
-        aria-label="Home"
-      >
-        <span className="brand-orbit-body">
-          <Star width={40} height={40} className="brand-mark" />
-        </span>
-      </a>
       <div className="nav-links">
         {links.map(({ id, label }) => (
           <a

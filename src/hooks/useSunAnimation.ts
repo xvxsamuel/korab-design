@@ -5,7 +5,7 @@ const SUN_PATH = [
   { t: 0.0,  x: 92, y: 72 },
   { t: 0.33, x: 52, y: 14 },
   { t: 0.66, x: 32, y: 16 },
-  { t: 1.0,  x: 8,  y: 72 },
+  { t: 1.0,  x: 8,  y: 28 },
 ] as const;
 
 // Fraction of the full arc each star travels by the time you reach the bottom.
@@ -96,49 +96,54 @@ export function useSunAnimation() {
       placeStar(starElB, sunVX + ringRadiusB * Math.cos(angleB), sunVY + ringRadiusB * Math.sin(angleB));
     };
 
-    // Panel-aware mapping: progress = (scrollY - panelOffsetPx) / cachedBaseMax.
-    // cachedBaseMax is captured once at init (no panel open). panelOffsetPx is
-    // dispatched by the Works component each scroll while a panel is open and
-    // equals how much of the panel sits above the user's scroll. The sun
-    // pauses through the panel zone but is mathematically invariant under
-    // both the panel CSS transition AND the snap-close + scroll-comp — so
-    // open/close never cause sun motion of any kind.
     let cachedBaseMax = 0;
-    let panelOffsetPx = 0;
 
     const computeProgress = () => {
       if (cachedBaseMax <= 0) return 0;
-      const eff = Math.max(0, Math.min(cachedBaseMax, window.scrollY - panelOffsetPx));
+      const eff = Math.max(0, Math.min(cachedBaseMax, window.scrollY));
       return eff / cachedBaseMax;
     };
 
-    const reapply = () => apply(computeProgress());
-
-    const onPanelOffset = (e: Event) => {
-      const detail = (e as CustomEvent<number>).detail;
-      panelOffsetPx = typeof detail === 'number' ? Math.max(0, detail) : 0;
-      reapply();
-    };
-    window.addEventListener('sun:panel-offset', onPanelOffset);
-
-    const onFreeze = () => {
-      panelOffsetPx = 0;
-      reapply();
-    };
-    window.addEventListener('sun:freeze', onFreeze);
-
+    let displayedProgress = 0;
+    let targetProgress = 0;
     let rafId = 0;
-    let lastSy = -1;
-    let lastOffset = -1;
-    const tick = () => {
-      const sy = window.scrollY;
-      if (sy !== lastSy || panelOffsetPx !== lastOffset) {
-        lastSy = sy;
-        lastOffset = panelOffsetPx;
-        apply(computeProgress());
-      }
+    let running = false;
+
+    // Lerp factor per frame. ~0.18 settles in roughly 8–12 frames at 60fps —
+    // enough damping to absorb scroll jitter without feeling laggy.
+    const LERP = 0.18;
+    const SETTLE_EPS = 0.0005;
+
+    const startLoop = () => {
+      if (running) return;
+      running = true;
       rafId = requestAnimationFrame(tick);
     };
+
+    const tick = () => {
+      targetProgress = computeProgress();
+      const delta = targetProgress - displayedProgress;
+      if (Math.abs(delta) < SETTLE_EPS) {
+        displayedProgress = targetProgress;
+        apply(displayedProgress);
+        running = false;
+        return;
+      }
+      displayedProgress += delta * LERP;
+      apply(displayedProgress);
+      rafId = requestAnimationFrame(tick);
+    };
+
+    const reapply = () => {
+      targetProgress = computeProgress();
+      startLoop();
+    };
+
+    const onScroll = () => {
+      targetProgress = computeProgress();
+      startLoop();
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
 
     const init = (isResize = false) => {
       vw = window.innerWidth;
@@ -188,35 +193,48 @@ export function useSunAnimation() {
       orbitRing.setAttribute('stroke-width',  String(SHELL_BASE / ringRadius));
       orbitRingB.setAttribute('stroke-width', String(SHELL_BASE / ringRadiusB));
 
-      // Compute end angles: where each star lands at the contact section
-      const totalScroll = document.documentElement.scrollHeight - vh;
-      cachedBaseMax = totalScroll;
+      // The animation ends earlier than the bottom of the document so the sun
+      // parks next to the email link while the contact section is in view.
+      // animEnd is set so the email's center sits at the sun's terminal Y.
       const contactEl   = document.getElementById('contact');
-      const titleEl     = contactEl?.querySelector<HTMLElement>('.section-title') ?? contactEl;
+      const targetEl    =
+        contactEl?.querySelector<HTMLElement>('.contact-email') ??
+        contactEl?.querySelector<HTMLElement>('.section-title') ??
+        contactEl;
+      const totalScroll = document.documentElement.scrollHeight - vh;
 
-      if (titleEl) {
-        const tr = titleEl.getBoundingClientRect();
-        // Title's viewport position when fully scrolled to bottom
-        const targetVX = tr.left + window.scrollX;
-        const targetVY = tr.top  + window.scrollY - totalScroll;
-
-        const s1 = sampleSun(1);
-        const sunEndVX = (s1.x / 100) * vw;
-        const sunEndVY = (s1.y / 100) * vh;
-
-        endAngleA = Math.atan2( (targetVY - sunEndVY), targetVX - sunEndVX);
-        endAngleB = Math.atan2(-(targetVY - sunEndVY), targetVX - sunEndVX);
+      if (targetEl) {
+        const tr = targetEl.getBoundingClientRect();
+        const targetDocY = tr.top + window.scrollY + tr.height / 2;
+        const sunEndYFrac = SUN_PATH[SUN_PATH.length - 1].y / 100;
+        const animEnd = Math.min(totalScroll, Math.max(0, targetDocY - vh * sunEndYFrac));
+        cachedBaseMax = animEnd;
       } else {
-        endAngleA = startAngleA + Math.PI;
-        endAngleB = startAngleB + Math.PI;
+        cachedBaseMax = totalScroll;
       }
 
+      // Stars should land in the lower portion of the viewport so they remain
+      // visible at the bottom-most scroll. Choose target directions in the
+      // lower part of the viewport and back-compute endAngles so that
+      // lerp(startAngle, endAngle, frac) lands at the chosen direction at p=1.
+      const s1 = sampleSun(1);
+      const sunEndVX = (s1.x / 100) * vw;
+      const sunEndVY = (s1.y / 100) * vh;
+
+      const dirA = Math.atan2(vh * 0.21 - sunEndVY, vw * 0.55 - sunEndVX);
+      const dirB = Math.atan2(vh * 0.35 - sunEndVY, vw * 0.30 - sunEndVX);
+
+      endAngleA = (dirA - (1 - STAR_ARC_SCALE)   * startAngleA) / STAR_ARC_SCALE;
+      endAngleB = (dirB - (1 - STAR_B_ARC_SCALE) * startAngleB) / STAR_B_ARC_SCALE;
+
+      const p = computeProgress();
+      displayedProgress = p;
+      targetProgress = p;
+      apply(p);
       if (isResize) reapply();
-      else apply(computeProgress());
     };
 
     init(false);
-    rafId = requestAnimationFrame(tick);
 
     let resizeTimer: ReturnType<typeof setTimeout>;
     const onResize = () => {
@@ -229,9 +247,9 @@ export function useSunAnimation() {
     return () => {
       clearTimeout(resizeTimer);
       cancelAnimationFrame(rafId);
+      running = false;
       window.removeEventListener('resize', onResize);
-      window.removeEventListener('sun:panel-offset', onPanelOffset);
-      window.removeEventListener('sun:freeze', onFreeze);
+      window.removeEventListener('scroll', onScroll);
     };
   }, []);
 }

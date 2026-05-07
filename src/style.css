@@ -66,7 +66,7 @@ body {
   font-family: var(--body);
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
-  transition: background-color 0.7s var(--ease-soft);
+  transition: background-color 0.4s ease, color 0.4s ease;
 }
 
 html { overflow-x: clip; }
@@ -82,8 +82,23 @@ body {
 a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none; }
 
 ::selection { background: var(--ink); color: var(--bg); }
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-thumb { background: var(--ink-soft); border-radius: 10px; }
+
+/* Scrollbar — minimalist, palette-matched, cross-browser ------------- */
+html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--ink);
+  border-radius: 999px;
+  border: 3px solid var(--bg);
+  background-clip: padding-box;
+  transition: background 0.25s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner { background: transparent; }
 
 
 /* Cursor ------------------------------------------------------------- */
@@ -94,7 +109,6 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
   background: var(--ink);
   pointer-events: none;
   z-index: 1000;
-  mix-blend-mode: multiply;
   will-change: left, top, width, height, border-radius, background;
 }
 
@@ -105,7 +119,10 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
   padding: 22px var(--gutter);
   display: flex; align-items: center; gap: 56px;
   pointer-events: none;
+  color: var(--ink);
+  transition: color 0.35s ease;
 }
+.nav a { transition: color 0.35s ease; }
 .brand-orbit {
   width: 40px;
   height: 40px;
@@ -151,6 +168,7 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
 .nav-links a:hover .nav-label-base {
   transform: translateY(110%);
   opacity: 0;
+  transition-delay: 0.1s;
 }
 
 /* DeFonte label — slides in from above on hover */
@@ -171,6 +189,7 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
 .nav-links a:hover .nav-label-alt {
   transform: translateY(0);
   opacity: 1;
+  transition-delay: 0.1s;
 }
 
 /* contact button in nav */
@@ -278,7 +297,6 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
 }
 
 /* Second (smaller) orbit ring */
-.sun-orbit-b { opacity: 0; }
 .sun-orbit-ring-b { stroke: rgba(68, 91, 75, 0.15); }
 
 /* Both orbit stars — position: fixed, pure viewport space, JS drives position + size */
@@ -292,16 +310,6 @@ a, button, [role="button"] { color: inherit; text-decoration: none; cursor: none
   will-change: transform, opacity;
 }
 .star-b .brand-orbit-body { animation-duration: 50s; }
-
-/* Smoothing class added during the snap auto-close: the sun is frozen for
-   the freeze window, then released. This class makes its catch-up to natural
-   progress on the next scroll a gentle tween instead of a snap. */
-.sun-trace.is-smoothing,
-.sun-orbit.is-smoothing,
-.star-a.is-smoothing,
-.star-b.is-smoothing {
-  transition: transform 0.4s var(--ease-soft);
-}
 
 /* Spinning icon shared by nav brand and orbit stars ------------------ */
 
@@ -416,7 +424,6 @@ section {
   padding-top: 120px;
   color: var(--ink);
 }
-.rule-h { display: none; }
 
 /* Works -------------------------------------------------------------- */
 
@@ -482,60 +489,324 @@ section {
 .work-row:hover .year,
 .work-row-wrap.is-open .num,
 .work-row-wrap.is-open .year { color: var(--accent); }
-.rule-row { width: 100%; }
-
-/* Expandable detail panel — fluid height via grid-template-rows trick.
-   Inner content slides + fades using the same ease-soft curve as the navbar. */
-.work-panel {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 0.7s var(--ease-soft);
+.rule-row {
+  width: 100%;
+  height: 1px;
+  background: var(--ink-faint);
+  list-style: none;
 }
-.work-row-wrap.is-open .work-panel { grid-template-rows: 1fr; }
-.work-panel-inner {
+
+.work-panel-flowers {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 36vh;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Cog cluster — three equal-size interlocked star-cogs.
+   A is the upper-left, C sits directly below A (vertical mesh),
+   B sits up-right of A meshing with it. B and C do not touch. */
+/* Cog cluster — three equal 120px stars, geometrically meshed.
+   Star geometry from star.svg (viewBox 191×200, preserveAspectRatio=meet):
+     - Rendered scale: 120/200 = 0.6 (height-bound), so star is 114.6×120 in a 120 box.
+     - Tip radius:  103 viewBox units × 0.6 = 61.8px
+     - Gap radius:   91.6 viewBox units × 0.6 = 55.0px
+     - Mesh distance (tip-to-gap-floor) = 61.8 + 55.0 = 116.8px between centers.
+   12 teeth → 30° per tooth → 15° phase offset for tip-into-gap.
+   Meshing axes are placed on multiples of 30° from A so A's teeth align exactly.
+     - A→B axis at 30° below horizontal (right-and-down)
+     - A→C axis at 240° (left-and-down) */
+.cogs {
+  position: relative;
+  width: 279px;
+  height: 221px;
+  margin: auto auto 0;
+  pointer-events: none;
+  color: var(--accent);
+  opacity: 0.85;
+}
+.cog {
+  position: absolute;
+  display: block;
+  width: 120px;
+  height: 120px;
+}
+.cog svg { display: block; width: 100%; height: 100%; }
+.cog-a {
+  top: 0;
+  left: 58px;
+}
+.cog-a svg { animation: cog-spin-cw 24s linear infinite; }
+.cog-b {
+  top: 58px;
+  left: 159px;
+  transform: rotate(15deg);
+}
+.cog-b svg { animation: cog-spin-ccw 24s linear infinite; }
+.cog-c {
+  top: 101px;
+  left: 0;
+  transform: rotate(15deg);
+}
+.cog-c svg { animation: cog-spin-ccw 24s linear infinite; }
+@keyframes cog-spin-cw  { to { transform: rotate(360deg); } }
+@keyframes cog-spin-ccw { to { transform: rotate(-360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .cog-a, .cog-b, .cog-c { animation: none; }
+}
+.bg-flower {
+  position: absolute;
+  bottom: 0;
+  display: block;
+  color: var(--accent);
+}
+.bg-flower-stem {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  top: 0;
+  width: 1.5px;
+  background: var(--rule);
+  transform: translateX(-50%) scaleY(0);
+  transform-origin: bottom center;
+}
+.work-panel.is-open .bg-flower-stem,
+footer.is-grown .bg-flower-stem {
+  animation: flower-grow var(--grow, 2s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes flower-grow {
+  to { transform: translateX(-50%) scaleY(1); }
+}
+.bg-flower-leaf {
+  position: absolute;
+  display: block;
+  overflow: visible;
+  opacity: 0;
+  z-index: 2;
+}
+.bg-flower-leaf-edge {
+  stroke: var(--rule);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.bg-flower-leaf-vein {
+  stroke: rgba(68, 91, 75, 0.25);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.bg-flower-leaf--right {
+  left: 50%;
+  transform-origin: 0 50%;
+  transform: rotate(-30deg) scale(0);
+}
+.bg-flower-leaf--left {
+  right: 50%;
+  transform-origin: 100% 50%;
+  transform: rotate(30deg) scale(0);
+}
+.work-panel.is-open .bg-flower-leaf--right,
+footer.is-grown .bg-flower-leaf--right {
+  animation: leaf-grow-right 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--leaf-delay, 0.3s) forwards;
+}
+.work-panel.is-open .bg-flower-leaf--left,
+footer.is-grown .bg-flower-leaf--left {
+  animation: leaf-grow-left 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--leaf-delay, 0.3s) forwards;
+}
+@keyframes leaf-grow-right {
+  to { opacity: 1; transform: rotate(-30deg) scale(1); }
+}
+@keyframes leaf-grow-left {
+  to { opacity: 1; transform: rotate(30deg) scale(1); }
+}
+.bg-flower-star {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: var(--star-size, 18px);
+  height: var(--star-size, 18px);
+  color: var(--accent);
+  transform: translate(-50%, -100%) scale(0);
+  transform-origin: 50% 100%;
+  display: block;
+  opacity: 0;
+}
+.work-panel.is-open .bg-flower-star,
+footer.is-grown .bg-flower-star {
+  animation: star-bloom 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) calc(var(--grow, 2s) * 0.7) forwards;
+}
+@keyframes star-bloom {
+  to { transform: translate(-50%, -100%) scale(1); opacity: 1; }
+}
+
+/* Side drawer — fixed-position panel slides in from the right. The works list
+   stays in place; page height is unchanged on open/close. */
+.work-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(68, 91, 75, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s var(--ease-soft);
+  z-index: 50;
+}
+.work-panel-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.work-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  background: var(--bg);
+  border-left: 1px solid var(--ink-faint);
+  z-index: 60;
+  transform: translateX(100%);
+  visibility: hidden;
+  transition:
+    transform 0.5s var(--ease-soft),
+    visibility 0s linear 0.5s;
   overflow: hidden;
-  min-height: 0;
+  overscroll-behavior: contain;
+}
+.work-panel.is-open {
+  transform: translateX(0);
+  visibility: visible;
+  transition:
+    transform 0.5s var(--ease-soft),
+    visibility 0s linear 0s;
+}
+.work-panel-inner {
+  position: relative;
+  padding: clamp(80px, 12vh, 140px) var(--gutter) clamp(40px, 8vh, 80px);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* Sibling of .work-panel (not a child) so it renders in the root stacking context,
+   allowing the morphing cursor pill (z-index 61) to slide behind the icon (z-index 62). */
+.work-panel-close {
+  position: fixed;
+  top: 96px;
+  right: 24px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 999px;
+  color: var(--ink);
+  line-height: 1;
+  cursor: none;
+  padding: 0;
+  z-index: 62;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(40px);
+  transition:
+    color 0.35s var(--ease-soft),
+    opacity 0.35s var(--ease-soft),
+    transform 0.5s var(--ease-soft);
+}
+.work-panel-close.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+.work-panel-close svg {
+  position: relative;
+  display: block;
+}
+/* ::before is a CSS-only fallback for touch / no-cursor devices */
+.work-panel-close::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transform: scale(0.86);
+  opacity: 0;
+  z-index: -1;
+  transition:
+    transform 0.45s var(--ease-soft),
+    opacity 0.32s var(--ease-soft);
+}
+@media (pointer: coarse) {
+  .work-panel-close:hover::before {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 .work-panel-content {
-  padding: 8px 0 64px 88px;
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  gap: 56px;
-  align-items: start;
-  opacity: 0;
-  transform: translateY(18px);
-  transition:
-    opacity 0.45s ease 0.08s,
-    transform 0.55s var(--ease-soft) 0.08s;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 56px);
+  align-items: stretch;
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
-.work-row-wrap.is-open .work-panel-content {
-  opacity: 1;
-  transform: translateY(0);
+.work-panel-text {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.work-panel-num {
+  font-family: var(--body);
+  font-size: 13px;
+  color: var(--ink-soft);
+  letter-spacing: 0.12em;
+  display: block;
+  margin-bottom: clamp(8px, 1.5vh, 16px);
+}
+.work-panel-title {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(28px, 3.6vw, 52px);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  margin: 0 0 clamp(12px, 2vh, 24px);
+  color: var(--ink);
 }
 .work-panel-blurb {
   font-family: var(--display);
   font-weight: 500;
-  font-size: clamp(18px, 1.7vw, 24px);
+  font-size: clamp(16px, 1.5vw, 22px);
   line-height: 1.25;
   letter-spacing: -0.005em;
   color: var(--ink);
-  margin: 0 0 20px;
+  margin: 0 0 clamp(10px, 1.5vh, 20px);
   max-width: 36ch;
 }
 .work-panel-body {
   font-family: var(--body);
-  font-size: 15px;
-  line-height: 1.65;
+  font-size: clamp(13px, 1.05vw, 15px);
+  line-height: 1.55;
   color: var(--ink-soft);
-  margin: 0 0 28px;
+  margin: 0 0 clamp(14px, 2.4vh, 28px);
   max-width: 52ch;
+  min-height: 0;
+  overflow: hidden;
 }
 .work-panel-meta {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, auto));
-  gap: 32px;
+  gap: clamp(16px, 2.5vw, 32px);
   margin: 0;
-  padding-top: 20px;
+  padding-top: clamp(12px, 1.8vh, 20px);
   border-top: 1px solid var(--ink-faint);
 }
 .work-panel-meta dt {
@@ -556,17 +827,21 @@ section {
 .work-panel-images {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-rows: 1.4fr 1fr;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
 }
 .work-image-placeholder {
-  aspect-ratio: 4 / 3;
   background: rgba(68, 91, 75, 0.08);
   border: 1px solid var(--ink-faint);
   border-radius: 4px;
   width: 100%;
+  height: 100%;
+  min-height: 0;
 }
-.work-image-placeholder.wide  { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
-.work-image-placeholder.tall  { aspect-ratio: 3 / 4; }
+.work-image-placeholder.wide { grid-column: 1 / -1; }
+.work-image-placeholder.tall { grid-column: 2; grid-row: 2; }
 
 /* About -------------------------------------------------------------- */
 
@@ -602,9 +877,49 @@ section {
   width: 100%;
   aspect-ratio: 2 / 3;
   object-fit: cover;
-  object-position: center top;
+  object-position: center 30%;
   border-radius: 6px;
   display: block;
+}
+.about-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-top: 40px;
+  max-width: 48ch;
+}
+.about-meta-block { min-width: 0; }
+.about-meta-title {
+  font-family: var(--body);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 12px;
+}
+.about-services,
+.about-contact {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.about-contact-link {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--ink-faint);
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+.about-contact-link:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 /* Contact ------------------------------------------------------------ */
@@ -711,32 +1026,32 @@ section {
   stroke-dasharray: 60;
   stroke-dashoffset: 60;
 }
-/* 1. Base line draws — the ground */
-.contact-email:hover .contact-chevron svg path:nth-child(2) {
-  animation: svg-draw 0.16s var(--ease-soft) 0s both;
-}
-/* 2. Icon bounces on impact */
-.contact-email:hover .contact-chevron svg {
-  animation: icon-bounce 0.32s cubic-bezier(0.36, 0.07, 0.19, 0.97) 0.18s both;
-}
-/* 3. Arc traces the trajectory upward */
+/* 1. Arc traces with bounce physics — accelerates into impact, decelerates climbing out */
 .contact-email:hover .contact-chevron svg path:nth-child(3) {
-  animation: svg-draw 0.44s var(--ease-soft) 0.46s both;
+  animation: arc-bounce-draw 0.6s linear 0s both;
 }
-/* 4. Corner arrowhead caps it */
+/* 2. Dash flicks in at the impact moment */
+.contact-email:hover .contact-chevron svg path:nth-child(2) {
+  animation: svg-draw 0.12s ease-out 0.26s both;
+}
+/* 3. Corner arrowhead — overlaps the arc's deceleration so the whole stroke reads as one motion */
 .contact-email:hover .contact-chevron svg path:nth-child(4) {
-  animation: svg-draw 0.18s var(--ease-soft) 0.88s both;
+  animation: svg-draw 0.22s linear 0.38s both;
 }
 
 @keyframes svg-draw {
   from { stroke-dashoffset: 60; }
   to   { stroke-dashoffset: 0; }
 }
-@keyframes icon-bounce {
-  0%   { transform: translateY(2px); }
-  45%  { transform: translateY(-5px); }
-  72%  { transform: translateY(1px); }
-  100% { transform: translateY(0); }
+/* Arc draw shaped like a bounce:
+   - 0–42%: accelerates toward impact at ~midpoint
+   - 42–55%: tiny squash at impact (energy absorbed)
+   - 55–100%: decelerates climbing out, but lands cleanly (no long tail) */
+@keyframes arc-bounce-draw {
+  0%   { stroke-dashoffset: 60; animation-timing-function: cubic-bezier(0.55, 0, 0.85, 0); }
+  42%  { stroke-dashoffset: 33; animation-timing-function: ease-out; }
+  55%  { stroke-dashoffset: 30; animation-timing-function: cubic-bezier(0.33, 0.4, 0.5, 1); }
+  100% { stroke-dashoffset: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -755,18 +1070,65 @@ section {
 /* Footer ------------------------------------------------------------- */
 
 footer {
-  padding: 28px var(--gutter);
+  position: relative;
+  /* Top padding must clear the tallest stem (22vh) plus the star (which sits
+     above the stem and extends up to ~80px). */
+  padding: calc(22vh + 80px) var(--gutter) 28px;
   font-family: var(--body);
   font-size: 11px;
   color: var(--ink-soft);
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: lowercase;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  overflow: hidden;
 }
 
 .footer-copy {
   display: block;
+  position: relative;
+  z-index: 2;
+}
+
+.footer-top {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 12px;
+  background: none;
+  border: 1px solid var(--ink-faint);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: none;
+  transition: color 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+}
+.footer-top:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.footer-top svg {
+  display: block;
+  transition: transform 0.32s var(--ease-soft);
+}
+.footer-top:hover svg {
+  transform: translateY(-2px);
+}
+
+.footer-flowers {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* Responsive --------------------------------------------------------- */
@@ -786,26 +1148,45 @@ footer {
     padding-top: 100px;
   }
   .work-row { grid-template-columns: 1fr auto; }
-  .work-main { grid-template-columns: 28px 1fr; gap: 18px; padding-right: 20px; }
+  .work-main { grid-template-columns: 28px 1fr; gap: 14px; padding-right: 20px; }
   .work-row .tags { display: none; }
   .work-row .year { padding-left: 16px; font-size: 12px; }
-  .work-panel-content {
-    grid-template-columns: 1fr;
-    padding: 0 0 40px 0;
-    gap: 28px;
-  }
+  .work-panel { width: 100vw; }
+  .work-panel-inner { padding: 64px var(--gutter); }
+  .work-panel-content { grid-template-columns: 1fr; gap: 28px; }
   .work-panel-meta { grid-template-columns: 1fr 1fr; gap: 20px; }
   .work-panel-images { grid-template-columns: 1fr; }
   .work-image-placeholder.wide { grid-column: auto; }
   .about-body { grid-template-columns: 1fr; gap: 32px; }
   .about-img-wrap { position: static; max-width: 160px; }
   .about-img { aspect-ratio: 2 / 3; }
+  .about-meta { grid-template-columns: 1fr; gap: 28px; margin-top: 32px; }
   .contact-email { font-size: clamp(22px, 6vw, 36px); }
 }
 
 @media (max-width: 480px) {
   .hero-name { font-size: clamp(60px, 18vw, 120px); }
   .hero-name .row.row2 { padding-left: 0.5em; }
+}
+
+/* Short viewports: the sun's circular orbit can push stars off-screen or
+   misalign with the title. Clamp the sun smaller so the derived ring radius
+   stays in proportion to the available height (not just width). */
+@media (max-height: 700px) {
+  .sun-trace {
+    width: min(var(--sun-size), 38vh);
+    height: min(var(--sun-size), 38vh);
+    max-width: 320px;
+    max-height: 320px;
+  }
+}
+@media (max-height: 560px) {
+  .sun-trace {
+    width: min(var(--sun-size), 32vh);
+    height: min(var(--sun-size), 32vh);
+    max-width: 240px;
+    max-height: 240px;
+  }
 }
 
 @media (hover: none), (pointer: coarse) {

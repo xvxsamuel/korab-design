@@ -16,8 +16,31 @@ function lerpColor(a: [number,number,number], b: [number,number,number], t: numb
 }
 
 // --ink: #445b4b   --accent (star yellow): #d79554
-const INK:    [number,number,number] = [68,  91,  75];
-const ACCENT: [number,number,number] = [215, 149, 84];
+const INK_FALLBACK:    [number,number,number] = [68,  91,  75];
+const ACCENT_FALLBACK: [number,number,number] = [215, 149, 84];
+
+function parseColor(input: string): [number, number, number] | null {
+  const s = input.trim();
+  if (!s) return null;
+  if (s.startsWith('#')) {
+    let hex = s.slice(1);
+    if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('');
+    if (hex.length !== 6) return null;
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    if ([r, g, b].some(Number.isNaN)) return null;
+    return [r, g, b];
+  }
+  const m = s.match(/rgba?\(([^)]+)\)/);
+  if (m) {
+    const parts = m[1].split(/[,\s/]+/).map((v) => parseFloat(v));
+    if (parts.length >= 3 && parts.slice(0, 3).every((n) => !Number.isNaN(n))) {
+      return [parts[0], parts[1], parts[2]];
+    }
+  }
+  return null;
+}
 
 export default function Cursor() {
   const ref = useRef<HTMLDivElement>(null);
@@ -33,8 +56,9 @@ export default function Cursor() {
     let mx = -200, my = -200;
     let pillTarget: { x: number; y: number; w: number; h: number } | null = null;
     // 'nav' keeps cursor behind fixed nav (z-index 39 < nav 40)
-    // 'email' uses z-index auto so <main> content always paints on top
-    let pillKind: 'nav' | 'email' | null = null;
+    // 'email' uses z-index 5 so <main> content (z-index 10+) always paints on top
+    // 'panel-close' sits above the work panel (z-index 60); SVG inside the button paints on top via its own stacking context
+    let pillKind: 'nav' | 'email' | 'panel-close' | null = null;
     // live reference to the hovered email element so we can re-read its rect each frame
     let hoveredEmail: HTMLElement | null = null;
 
@@ -48,14 +72,23 @@ export default function Cursor() {
     let raf = 0;
     let running = false;
 
+    let INK: [number, number, number] = INK_FALLBACK;
+    let ACCENT: [number, number, number] = ACCENT_FALLBACK;
+    const refreshPalette = () => {
+      const cs = getComputedStyle(document.documentElement);
+      INK = parseColor(cs.getPropertyValue('--ink')) ?? INK_FALLBACK;
+      ACCENT = parseColor(cs.getPropertyValue('--accent')) ?? ACCENT_FALLBACK;
+    };
+    refreshPalette();
+
     const getTarget = (): Target => {
       if (pillTarget) return { kind: 'pill', ...pillTarget };
       return { kind: 'dot', x: mx, y: my };
     };
 
     const tick = () => {
-      // Keep pill target in sync with the email element as its chevron expands
-      if (pillKind === 'email' && hoveredEmail) {
+      // Keep pill target in sync with the hovered element as its size/position changes
+      if ((pillKind === 'email' || pillKind === 'panel-close') && hoveredEmail) {
         const r = hoveredEmail.getBoundingClientRect();
         pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
       }
@@ -97,18 +130,20 @@ export default function Cursor() {
         el.style.borderRadius = `${cr}px`;
         el.style.background = lerpColor(INK, ACCENT, ct);
 
-        // email pill: z-index auto so <main> (later in DOM) always paints on top
+        // email pill: z-index 5 so it sits above the sun (z-index 1-2) but below
+        //             section content (z-index 10) — text stays on top of pill
         // nav pill:   z-index 39 so it sits below the fixed nav at z-index 40
         // dot mode:   z-index 1000 so the dot is always visible
         if (pillKind === 'email') {
-          el.style.zIndex = 'auto';
-          el.style.mixBlendMode = 'normal';
+          el.style.zIndex = '5';
+        } else if (pillKind === 'panel-close') {
+          // Sits above the work panel (z-index 60); SVG inside the close button
+          // has its own stacking context (z-index 2 with isolation) so it paints on top.
+          el.style.zIndex = '61';
         } else if (ct > 0.5) {
           el.style.zIndex = '39';
-          el.style.mixBlendMode = 'normal';
         } else {
           el.style.zIndex = '1000';
-          el.style.mixBlendMode = 'multiply';
         }
       }
 
@@ -141,12 +176,18 @@ export default function Cursor() {
       const el = (e.target as Element | null);
       const navLink  = el?.closest<HTMLElement>('.nav-links a');
       const emailLink = el?.closest<HTMLElement>('.contact-email');
+      const closeBtn = el?.closest<HTMLElement>('.work-panel-close');
 
       if (navLink) {
         const r = navLink.getBoundingClientRect();
         pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
         pillKind = 'nav';
         hoveredEmail = null;
+      } else if (closeBtn) {
+        const r = closeBtn.getBoundingClientRect();
+        pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
+        pillKind = 'panel-close';
+        hoveredEmail = closeBtn;
       } else if (emailLink) {
         const r = emailLink.getBoundingClientRect();
         pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
@@ -163,20 +204,27 @@ export default function Cursor() {
     const recompute = () => {
       const navHovered   = document.querySelector<HTMLElement>('.nav-links a:hover');
       const emailHovered = document.querySelector<HTMLElement>('.contact-email:hover');
-      const hovered = navHovered ?? emailHovered;
+      const closeHovered = document.querySelector<HTMLElement>('.work-panel-close:hover');
+      const hovered = navHovered ?? closeHovered ?? emailHovered;
       if (hovered) {
         const r = hovered.getBoundingClientRect();
         pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
-        pillKind = navHovered ? 'nav' : 'email';
-        hoveredEmail = emailHovered ?? null;
+        pillKind = navHovered ? 'nav' : closeHovered ? 'panel-close' : 'email';
+        hoveredEmail = (closeHovered ?? emailHovered) ?? null;
         schedule();
       }
+    };
+
+    const onPalette = () => {
+      refreshPalette();
+      schedule();
     };
 
     window.addEventListener('pointermove', onMove, { passive: true });
     document.addEventListener('pointerover', onOver, { passive: true });
     window.addEventListener('scroll', recompute, { passive: true });
     window.addEventListener('resize', recompute, { passive: true });
+    window.addEventListener('palette-change', onPalette);
 
     return () => {
       cancelAnimationFrame(raf);
@@ -184,6 +232,7 @@ export default function Cursor() {
       document.removeEventListener('pointerover', onOver);
       window.removeEventListener('scroll', recompute);
       window.removeEventListener('resize', recompute);
+      window.removeEventListener('palette-change', onPalette);
     };
   }, []);
 

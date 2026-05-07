@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-
-const ROW_TOP_OFFSET = 80;
+import { createPortal } from 'react-dom';
+import Cogs from './Cogs';
 
 type Project = {
   n: string;
@@ -9,6 +9,8 @@ type Project = {
   tags: string;
   year: string;
   bg: string;
+  ink: string;
+  accent: string;
   blurb: string;
   body: string;
 };
@@ -21,6 +23,8 @@ const projects: Project[] = [
     tags: 'UX Research · Brand Identity · Web',
     year: '2026',
     bg: '#E5D2A8',
+    ink: '#5a4423',
+    accent: '#c8743a',
     blurb:
       'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
     body:
@@ -33,6 +37,8 @@ const projects: Project[] = [
     tags: 'Data Science · Development · Gaming · Web',
     year: '2026',
     bg: '#C8D8C9',
+    ink: '#2e4332',
+    accent: '#c8a040',
     blurb:
       'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent vehicula lectus vel ipsum gravida, sed pulvinar lacus mattis.',
     body:
@@ -45,6 +51,8 @@ const projects: Project[] = [
     tags: 'Product Design · Brand Identity · Web Extension',
     year: '2026',
     bg: '#D9CCDD',
+    ink: '#4a3858',
+    accent: '#a86496',
     blurb:
       'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus suscipit tortor eget felis porttitor volutpat.',
     body:
@@ -57,6 +65,8 @@ const projects: Project[] = [
     tags: 'UX Research · Web · Ecommerce',
     year: '2025',
     bg: '#E8C2A1',
+    ink: '#5a3019',
+    accent: '#b85a26',
     blurb:
       'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras ultricies ligula sed magna dictum porta.',
     body:
@@ -64,150 +74,95 @@ const projects: Project[] = [
   },
 ];
 
+const PANEL_ID = 'work-panel';
+
 export default function Works() {
   const [open, setOpen] = useState<string | null>(null);
-  const rowRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const savedScrollRef = useRef<number | null>(null);
+  // Holds the project data while the panel is sliding out, so children
+  // stay mounted (and visible) for the duration of the close transition.
+  const [displayed, setDisplayed] = useState<Project | null>(null);
+  const triggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const lastTriggerRef = useRef<string | null>(null);
 
+  useEffect(() => {
+    if (open) {
+      const project = projects.find((p) => p.n === open) ?? null;
+      setDisplayed(project);
+      lastTriggerRef.current = open;
+      return;
+    }
+    // Keep current displayed data through the slide-out, then clear after
+    // the CSS transition (matches the 0.5s transform in style.css).
+    const t = window.setTimeout(() => setDisplayed(null), 500);
+    return () => window.clearTimeout(t);
+  }, [open]);
+
+  const close = () => {
+    setOpen(null);
+    const last = lastTriggerRef.current;
+    if (last) {
+      // Restore focus to the trigger after state flush.
+      requestAnimationFrame(() => triggerRefs.current[last]?.focus());
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Push the open project's palette onto the document root so all UI (nav,
+  // panel, cursor, anything that reads var(--bg|--ink|--accent)) reflects it.
+  // Tied to `displayed` (not `open`) so the colors persist through the
+  // slide-out transition.
   useEffect(() => {
     const root = document.documentElement;
-    const project = open ? projects.find((p) => p.n === open) : null;
-    if (project) root.style.setProperty('--bg', project.bg);
-    else root.style.removeProperty('--bg');
-  }, [open]);
-
-  // Snap-close with scroll compensation + sun freeze. Panel collapses without
-  // a CSS transition, scrollY is adjusted by exactly the amount of panel that
-  // was above the user, and the sun is told to hold its current displayed
-  // progress for the freeze window. All in one frame, so the page's visible
-  // content lines up identically and the sun visually stays put. After the
-  // freeze ends, the CSS smoothing class lets the sun gently catch up to its
-  // natural progress on the next scroll.
-  const SUN_SELECTOR = '.sun-trace, .sun-orbit, .star-a, .star-b';
-  const FREEZE_MS = 600;
-  const closeWithComp = () => {
-    if (!open) return;
-    const panelEl = document.getElementById(`work-panel-${open}`);
-    const innerEl = panelEl?.querySelector<HTMLElement>('.work-panel-inner');
-    if (!panelEl || !innerEl) {
-      setOpen(null);
-      savedScrollRef.current = null;
-      return;
+    if (displayed) {
+      root.style.setProperty('--bg', displayed.bg);
+      root.style.setProperty('--ink', displayed.ink);
+      root.style.setProperty('--accent', displayed.accent);
+    } else {
+      root.style.removeProperty('--bg');
+      root.style.removeProperty('--ink');
+      root.style.removeProperty('--accent');
     }
+    window.dispatchEvent(new Event('palette-change'));
+  }, [displayed]);
 
-    const panelHeight = innerEl.getBoundingClientRect().height;
-    const panelTopDoc = panelEl.getBoundingClientRect().top + window.scrollY;
-    const sy = window.scrollY;
-    const aboveUser = Math.max(0, Math.min(sy - panelTopDoc, panelHeight));
+  const toggle = (n: string) => setOpen((cur) => (cur === n ? null : n));
 
-    // Capture the sun's currently-displayed progress before anything changes.
-    const oldMax = document.documentElement.scrollHeight - window.innerHeight;
-    const heldProgress = oldMax > 0 ? Math.max(0, Math.min(1, sy / oldMax)) : 0;
-
-    panelEl.style.transition = 'none';
-    panelEl.style.gridTemplateRows = '0fr';
-    void panelEl.offsetHeight;
-    if (aboveUser > 0) window.scrollTo(0, sy - aboveUser);
-
-    // Freeze the sun at the captured value, then let it tween smoothly to its
-    // natural progress when it eventually unfreezes.
-    window.dispatchEvent(
-      new CustomEvent('sun:freeze', { detail: { progress: heldProgress, duration: FREEZE_MS } }),
-    );
-    const sunEls = document.querySelectorAll<HTMLElement>(SUN_SELECTOR);
-    sunEls.forEach((el) => el.classList.add('is-smoothing'));
-    window.setTimeout(
-      () => sunEls.forEach((el) => el.classList.remove('is-smoothing')),
-      FREEZE_MS + 500,
-    );
-
-    setOpen(null);
-    savedScrollRef.current = null;
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        panelEl.style.transition = '';
-        panelEl.style.gridTemplateRows = '';
-      });
-    });
-  };
-
-  // Trigger auto-close when the user is fully past or fully before the panel
-  // — i.e. the panel is no longer in the viewport in either direction. At
-  // those positions the panel is outside the viewport entirely, so removing
-  // it (with scroll comp) doesn't change any visible content.
-  useEffect(() => {
-    if (!open) return;
-    const panelEl = document.getElementById(`work-panel-${open}`);
-    if (!panelEl) return;
-
-    const onScroll = () => {
-      const r = panelEl.getBoundingClientRect();
-      const sy = window.scrollY;
-      const vh = window.innerHeight;
-      const max = document.documentElement.scrollHeight - vh;
-      const panelTopDoc = r.top + sy;
-      const panelBottomDoc = panelTopDoc + r.height;
-      const panelHeight = r.height;
-
-      // Tell sun animation how much panel height sits above scroll so it
-      // can subtract it from progress — prevents stars freezing at p=1
-      const aboveUser = Math.max(0, Math.min(sy - panelTopDoc, panelHeight));
-      window.dispatchEvent(new CustomEvent('sun:panel-offset', { detail: aboveUser }));
-
-      const pastPanel = sy > panelBottomDoc - vh * 0.3;
-      const beforePanel = sy + vh < panelTopDoc + vh * 0.3;
-      const atBottom = sy >= max - 5;
-
-      if (pastPanel || beforePanel || atBottom) closeWithComp();
-    };
-
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [open]);
-
-  const scrollToRow = (n: string) => {
-    requestAnimationFrame(() => {
-      const row = rowRefs.current[n];
-      if (!row) return;
-      const top = row.getBoundingClientRect().top + window.scrollY - ROW_TOP_OFFSET;
-      window.scrollTo({ top, behavior: 'smooth' });
-    });
-  };
-
-  const toggle = (n: string) => {
-    if (open === n) {
-      setOpen(null);
-      if (savedScrollRef.current !== null) {
-        const target = savedScrollRef.current;
-        savedScrollRef.current = null;
-        window.scrollTo({ top: target, behavior: 'smooth' });
-      }
-      return;
-    }
-    if (open === null) savedScrollRef.current = window.scrollY;
-    setOpen(n);
-    scrollToRow(n);
-  };
+  const isOpen = open !== null;
+  const project = displayed;
 
   return (
     <section id="works" className="works">
       <h2 className="section-title">Works</h2>
       <ul className="works-list">
         {projects.map((p, idx) => {
-          const isOpen = open === p.n;
+          const rowOpen = open === p.n;
           return (
             <Fragment key={p.n}>
-              <li className={`work-row-wrap${isOpen ? ' is-open' : ''}`}>
+              <li className={`work-row-wrap${rowOpen ? ' is-open' : ''}`}>
                 <button
                   type="button"
                   ref={(el) => {
-                    rowRefs.current[p.n] = el;
+                    triggerRefs.current[p.n] = el;
                   }}
                   className="work-row"
                   onClick={() => toggle(p.n)}
-                  aria-expanded={isOpen}
-                  aria-controls={`work-panel-${p.n}`}
+                  aria-expanded={rowOpen}
+                  aria-controls={PANEL_ID}
+                  aria-haspopup="dialog"
                 >
                   <span className="work-main">
                     <span className="num">{p.n}</span>
@@ -218,45 +173,88 @@ export default function Works() {
                   </span>
                   <span className="year">{p.year}</span>
                 </button>
-                <div
-                  id={`work-panel-${p.n}`}
-                  className="work-panel"
-                  aria-hidden={!isOpen}
-                >
-                  <div className="work-panel-inner">
-                    <div className="work-panel-content">
-                      <div className="work-panel-text">
-                        <p className="work-panel-blurb">{p.blurb}</p>
-                        <p className="work-panel-body">{p.body}</p>
-                        <dl className="work-panel-meta">
-                          <div>
-                            <dt>Role</dt>
-                            <dd>{p.role}</dd>
-                          </div>
-                          <div>
-                            <dt>Year</dt>
-                            <dd>{p.year}</dd>
-                          </div>
-                          <div>
-                            <dt>Scope</dt>
-                            <dd>{p.tags}</dd>
-                          </div>
-                        </dl>
-                      </div>
-                      <div className="work-panel-images">
-                        <div className="work-image-placeholder wide" />
-                        <div className="work-image-placeholder" />
-                        <div className="work-image-placeholder tall" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </li>
-              {idx < projects.length - 1 && <li className="rule-h rule-row" aria-hidden="true" />}
+              {idx < projects.length - 1 && <li className="rule-row" aria-hidden="true" />}
             </Fragment>
           );
         })}
       </ul>
+
+      <div
+        className={`work-panel-backdrop${isOpen ? ' is-open' : ''}`}
+        onClick={close}
+        aria-hidden={!isOpen}
+      />
+      <aside
+        id={PANEL_ID}
+        className={`work-panel${isOpen ? ' is-open' : ''}`}
+        style={project ? { background: project.bg } : undefined}
+        aria-hidden={!isOpen}
+        role="dialog"
+        aria-modal="true"
+        aria-label={project ? `${project.name} details` : 'Project details'}
+      >
+        {project && (
+          <div className="work-panel-inner">
+            <div className="work-panel-content">
+              <div className="work-panel-text">
+                <span className="work-panel-num">{project.n}</span>
+                <h3 className="work-panel-title">{project.name}</h3>
+                <p className="work-panel-blurb">{project.blurb}</p>
+                <p className="work-panel-body">{project.body}</p>
+                <dl className="work-panel-meta">
+                  <div>
+                    <dt>Role</dt>
+                    <dd>{project.role}</dd>
+                  </div>
+                  <div>
+                    <dt>Year</dt>
+                    <dd>{project.year}</dd>
+                  </div>
+                  <div>
+                    <dt>Scope</dt>
+                    <dd>{project.tags}</dd>
+                  </div>
+                </dl>
+                <Cogs />
+              </div>
+              <div className="work-panel-images">
+                <div className="work-image-placeholder wide" />
+                <div className="work-image-placeholder" />
+                <div className="work-image-placeholder tall" />
+              </div>
+            </div>
+          </div>
+        )}
+      </aside>
+      {project &&
+        createPortal(
+          <button
+            type="button"
+            className={`work-panel-close${isOpen ? ' is-open' : ''}`}
+            onClick={close}
+            aria-label="Close"
+            aria-controls={PANEL_ID}
+            tabIndex={isOpen ? 0 : -1}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>,
+          document.body,
+        )}
     </section>
   );
 }

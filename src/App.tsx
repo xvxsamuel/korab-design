@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import Star from './assets/star.svg?react';
 import Cursor from './components/Cursor';
@@ -7,13 +7,18 @@ import Hero from './components/Hero';
 import Works from './components/Works';
 import About from './components/About';
 import Contact from './components/Contact';
+import Footer from './components/Footer';
 import { useSunAnimation } from './hooks/useSunAnimation';
 
 const sectionIds = ['home', 'works', 'about', 'contact'] as const;
 
 export default function App() {
   const [active, setActive] = useState<string>('home');
-  const scrollCueRef = useRef<HTMLDivElement>(null);
+  // Initialize from current scrollY so the first paint already reflects the
+  // right state (no flash of the cue when refreshing partway down the page).
+  const [cueHidden, setCueHidden] = useState<boolean>(
+    () => typeof window !== 'undefined' && window.scrollY > 40,
+  );
 
   useEffect(() => {
     const io = new IntersectionObserver(
@@ -30,24 +35,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const el = scrollCueRef.current;
-    if (!el) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const onScroll = () => {
-      if (window.scrollY > 40) {
-        el.classList.add('hidden');
-      } else {
-        el.classList.remove('hidden');
-      }
-      clearTimeout(timer);
-    };
-
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      clearTimeout(timer);
-    };
+    const update = () => setCueHidden(window.scrollY > 40);
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    return () => window.removeEventListener('scroll', update);
   }, []);
 
   useSunAnimation();
@@ -78,15 +69,16 @@ export default function App() {
 
       <main>
         <Hero />
-        <div className="scroll-cue" aria-hidden="true" ref={scrollCueRef}>
+        <div
+          className={`scroll-cue${cueHidden ? ' hidden' : ''}`}
+          aria-hidden="true"
+        >
           <div className="arrow" />
         </div>
-        <Works />
         <About />
+        <Works />
         <Contact />
-        <footer>
-          <span className="footer-copy">© {new Date().getFullYear()} korab.design</span>
-        </footer>
+        <Footer />
       </main>
     </>
   );
