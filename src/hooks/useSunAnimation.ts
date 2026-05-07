@@ -14,8 +14,8 @@ const STAR_B_ARC_SCALE = 0.5;
 const RING_B_SCALE   = 0.65;
 // Second star size relative to the first star.
 const STAR_B_SIZE    = 0.65;
-// Extra angle (radians) added to star B's start — negative rotates it higher on its arc.
-const STAR_B_START_OFFSET = -Math.PI * -0.25;
+// Extra angle (radians) added to star B's start position along its arc.
+const STAR_B_START_OFFSET = Math.PI * 0.25;
 
 const SHELL_BASE = 100;
 

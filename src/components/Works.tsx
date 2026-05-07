@@ -217,12 +217,24 @@ export default function Works() {
 
   const isOpen = open !== null;
   const project = displayed;
+  // Palette source must update in the same render as `open` changes so the
+  // .work-portal's --ink/--accent are present before the cursor's pointerover
+  // handler reads them. Using `displayed` alone would lag by one render
+  // (it's set in a useEffect), letting the cursor cache root-default colors.
+  const paletteProject = (open ? projects.find((p) => p.n === open) : null) ?? displayed;
 
   const renderLayer = (p: Project, status: 'leaving' | 'current') => (
     <div
       key={`${status}-${p.n}`}
       className={`work-panel-layer work-panel-layer-${status}${cycleDir ? ` cycle-${cycleDir}` : ''}`}
-      style={{ background: p.bg }}
+      style={
+        {
+          background: p.bg,
+          '--bg': p.bg,
+          '--ink': p.ink,
+          '--accent': p.accent,
+        } as React.CSSProperties
+      }
     >
       <div className="work-panel-inner">
         <div className="work-panel-content">
@@ -300,11 +312,11 @@ export default function Works() {
         <div
           className="work-portal"
           style={
-            project
+            paletteProject
               ? ({
-                  '--bg': project.bg,
-                  '--ink': project.ink,
-                  '--accent': project.accent,
+                  '--bg': paletteProject.bg,
+                  '--ink': paletteProject.ink,
+                  '--accent': paletteProject.accent,
                 } as React.CSSProperties)
               : undefined
           }
