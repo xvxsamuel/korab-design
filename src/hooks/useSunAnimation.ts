@@ -1,5 +1,4 @@
 import { useLayoutEffect } from 'react';
-import gsap from 'gsap';
 
 const SUN_PATH = [
   { t: 0.0,  x: 92, y: 72 },
@@ -154,18 +153,14 @@ export function useSunAnimation() {
       const sunStartVY = (s0.y / 100) * vh;
 
       if (!isResize) {
-        const initT = `translate(${sunStartVX}px, ${sunStartVY}px) translate(-50%, -50%)`;
-        sunEl.style.transform   = initT;
-        orbitEl.style.opacity   = '0';
-        orbitElB.style.opacity  = '0';
-        sunEl.style.opacity     = '0';
-        starElA.style.opacity   = '0';
-        starElB.style.opacity   = '0';
-        gsap.to(sunEl,    { opacity: 1, duration: 1.0, ease: 'power2.out', delay: 0.3 });
-        gsap.to(orbitEl,  { opacity: 1, duration: 1.2, ease: 'power2.out', delay: 0.4 });
-        gsap.to(orbitElB, { opacity: 1, duration: 1.2, ease: 'power2.out', delay: 0.5 });
-        gsap.to(starElA,  { opacity: 1, duration: 1.0, ease: 'power2.out', delay: 0.3 });
-        gsap.to(starElB,  { opacity: 1, duration: 1.0, ease: 'power2.out', delay: 0.5 });
+        // Initial transform — fade-ins are driven by the .sun-fade-in CSS class
+        // (added below) so we don't need a JS animation runtime here.
+        sunEl.style.transform = `translate(${sunStartVX}px, ${sunStartVY}px) translate(-50%, -50%)`;
+        sunEl.classList.add('sun-fade-in');
+        orbitEl.classList.add('sun-fade-in');
+        orbitElB.classList.add('sun-fade-in');
+        starElA.classList.add('sun-fade-in');
+        starElB.classList.add('sun-fade-in');
       }
 
       // Measure the placeholder to get star A's start position and size.

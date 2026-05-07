@@ -66,10 +66,15 @@ body {
   font-family: var(--body);
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
-  transition: background-color 0.4s ease, color 0.4s ease;
 }
 
-html { overflow-x: clip; }
+html {
+  overflow-x: clip;
+  /* Reserves the scrollbar gutter at all times so locking scroll while a
+     work panel is open doesn't shift content right by the scrollbar's width. */
+  scrollbar-gutter: stable;
+}
+html.lock-scroll { overflow: hidden; }
 
 body {
   min-height: 100vh;
@@ -269,6 +274,25 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   opacity: 0;
   pointer-events: none;
   will-change: transform, opacity;
+}
+
+/* Mount fade-in for the sun, orbit rings, and orbit stars. Class is added
+   from useSunAnimation once the elements have been positioned so they fade
+   in in place rather than from (0,0). Approximates GSAP's power2.out. */
+@keyframes sun-mount-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.sun-fade-in {
+  animation: sun-mount-fade 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s both;
+}
+.sun-orbit.sun-fade-in {
+  animation-duration: 1.2s;
+  animation-delay: 0.4s;
+}
+.sun-orbit.sun-orbit-b.sun-fade-in,
+.star-b.sun-fade-in {
+  animation-delay: 0.5s;
 }
 .sun-trace::before {
   content: '';
@@ -671,6 +695,8 @@ footer.is-grown .bg-flower-star {
 @keyframes star-bloom {
   0%   { top: 100%; transform: translate(-50%, -100%) scale(0.15); opacity: 0; }
   15%  { opacity: 1; }
+  /* Hold the bud small while the stem grows — only bloom in the last stretch. */
+  70%  { transform: translate(-50%, -100%) scale(0.28); }
   100% { top: 0%;   transform: translate(-50%, -100%) scale(1);    opacity: 1; }
 }
 

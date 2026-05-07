@@ -139,8 +139,9 @@ export default function Works() {
 
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    // Lock <html> scroll (CSS reserves the gutter via scrollbar-gutter so the
+    // page doesn't shift when the styled scrollbar disappears).
+    document.documentElement.classList.add('lock-scroll');
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
     };
@@ -148,7 +149,7 @@ export default function Works() {
     window.addEventListener('keydown', onKey);
     window.addEventListener('works:close', onExternalClose);
     return () => {
-      document.body.style.overflow = prev;
+      document.documentElement.classList.remove('lock-scroll');
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('works:close', onExternalClose);
     };

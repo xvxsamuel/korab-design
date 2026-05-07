@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 
-type Target =
-  | { kind: 'dot'; x: number; y: number }
-  | { kind: 'pill'; x: number; y: number; w: number; h: number };
-
 const DOT_SIZE = 8;
 const LERP_DOT  = 0.28;
 const LERP_PILL = 0.12;
@@ -54,7 +50,9 @@ export default function Cursor() {
     setEnabled(true);
 
     let mx = -200, my = -200;
-    let pillTarget: { x: number; y: number; w: number; h: number } | null = null;
+    // Pill target rect — mutated in place each frame to avoid per-frame allocations.
+    const pillRect = { x: 0, y: 0, w: 0, h: 0 };
+    let pillActive = false;
     // 'nav' keeps cursor behind fixed nav (z-index 69 < nav 70)
     // 'email' uses z-index 5 so <main> content (z-index 10+) always paints on top
     // 'panel-close' sits above the work panel (z-index 60); SVG inside the button paints on top via its own stacking context
@@ -68,54 +66,51 @@ export default function Cursor() {
     let ch = DOT_SIZE;
     let cr = DOT_SIZE / 2;
     let ct = 0;
+    let lastZ = 0;
 
     let raf = 0;
     let running = false;
 
     let INK: [number, number, number] = INK_FALLBACK;
     let ACCENT: [number, number, number] = ACCENT_FALLBACK;
-    // Read --ink/--accent from the element under the cursor so the cursor
-    // picks up scoped palettes (nav has its own vars, work-portal has the
-    // active project's vars). Falls back to documentElement.
+    // Scoped palettes only exist on .nav and .work-portal — refresh only when
+    // crossing into / out of one of those subtrees. Avoids running
+    // getComputedStyle on every pointerover (one per element under the cursor).
+    let lastScope: Element | null = null;
     const refreshPalette = (sourceEl?: Element | null) => {
       const source = sourceEl ?? document.documentElement;
       const cs = getComputedStyle(source);
       INK = parseColor(cs.getPropertyValue('--ink')) ?? INK_FALLBACK;
       ACCENT = parseColor(cs.getPropertyValue('--accent')) ?? ACCENT_FALLBACK;
     };
-    refreshPalette();
-
-    const getTarget = (): Target => {
-      if (pillTarget) return { kind: 'pill', ...pillTarget };
-      return { kind: 'dot', x: mx, y: my };
+    const refreshPaletteFor = (el: Element | null | undefined) => {
+      const scope = (el?.closest('.nav, .work-portal') as Element | null) ?? null;
+      if (scope === lastScope) return;
+      lastScope = scope;
+      refreshPalette(scope ?? document.documentElement);
     };
+    refreshPalette();
 
     const tick = () => {
       // Keep pill target in sync with the hovered element as its size/position changes
       if ((pillKind === 'email' || pillKind === 'panel-close') && hoveredEmail) {
         const r = hoveredEmail.getBoundingClientRect();
-        pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
+        pillRect.x = r.left; pillRect.y = r.top;
+        pillRect.w = r.width; pillRect.h = r.height;
       }
 
-      const target = getTarget();
-      const speed = target.kind === 'pill' ? LERP_PILL : LERP_DOT;
-
       let tx: number, ty: number, tw: number, th: number, tr: number, tt: number;
-
-      if (target.kind === 'dot') {
-        tx = target.x - DOT_SIZE / 2;
-        ty = target.y - DOT_SIZE / 2;
-        tw = DOT_SIZE;
-        th = DOT_SIZE;
-        tr = DOT_SIZE / 2;
-        tt = 0;
+      let speed: number;
+      if (pillActive) {
+        tx = pillRect.x; ty = pillRect.y;
+        tw = pillRect.w; th = pillRect.h;
+        tr = th / 2; tt = 1;
+        speed = LERP_PILL;
       } else {
-        tx = target.x;
-        ty = target.y;
-        tw = target.w;
-        th = target.h;
-        tr = th / 2;
-        tt = 1;
+        tx = mx - DOT_SIZE / 2; ty = my - DOT_SIZE / 2;
+        tw = DOT_SIZE; th = DOT_SIZE;
+        tr = DOT_SIZE / 2; tt = 0;
+        speed = LERP_DOT;
       }
 
       cx += (tx - cx) * speed;
@@ -127,27 +122,26 @@ export default function Cursor() {
 
       const el = ref.current;
       if (el) {
-        el.style.left   = `${cx}px`;
-        el.style.top    = `${cy}px`;
-        el.style.width  = `${cw}px`;
-        el.style.height = `${ch}px`;
-        el.style.borderRadius = `${cr}px`;
-        el.style.background = lerpColor(INK, ACCENT, ct);
+        const s = el.style;
+        s.left   = `${cx}px`;
+        s.top    = `${cy}px`;
+        s.width  = `${cw}px`;
+        s.height = `${ch}px`;
+        s.borderRadius = `${cr}px`;
+        s.background = lerpColor(INK, ACCENT, ct);
 
         // email pill: z-index 5 so it sits above the sun (z-index 1-2) but below
         //             section content (z-index 10) — text stays on top of pill
-        // nav pill:   z-index 39 so it sits below the fixed nav at z-index 40
-        // dot mode:   z-index 1000 so the dot is always visible
-        if (pillKind === 'email') {
-          el.style.zIndex = '5';
-        } else if (pillKind === 'panel-close') {
-          // Sits above the work panel (z-index 60); SVG inside the close button
-          // has its own stacking context (z-index 2 with isolation) so it paints on top.
-          el.style.zIndex = '61';
-        } else if (ct > 0.5) {
-          el.style.zIndex = '69';
-        } else {
-          el.style.zIndex = '1000';
+        // panel-close pill: 61, sits above the work panel (z-index 60)
+        // nav pill:   69 so it sits below the fixed nav at z-index 70
+        // dot mode:   1000 so the dot is always visible
+        const z =
+          pillKind === 'email' ? 5 :
+          pillKind === 'panel-close' ? 61 :
+          ct > 0.5 ? 69 : 1000;
+        if (z !== lastZ) {
+          s.zIndex = `${z}`;
+          lastZ = z;
         }
       }
 
@@ -178,53 +172,48 @@ export default function Cursor() {
 
     const onOver = (e: PointerEvent) => {
       const el = (e.target as Element | null);
-      refreshPalette(el);
-      const navLink  = el?.closest<HTMLElement>('.nav-links a');
-      const emailLink = el?.closest<HTMLElement>('.contact-email');
-      const closeBtn = el?.closest<HTMLElement>('.work-panel-close');
+      refreshPaletteFor(el);
+      // Resolve the closest interactive container in a single tree walk so we
+      // don't run three separate .closest() calls per pointerover.
+      const hit = el?.closest<HTMLElement>(
+        '.nav-links a, .contact-email, .work-panel-close',
+      ) ?? null;
 
-      if (navLink) {
-        const r = navLink.getBoundingClientRect();
-        pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
-        pillKind = 'nav';
-        hoveredEmail = null;
-      } else if (closeBtn) {
-        const r = closeBtn.getBoundingClientRect();
-        pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
-        pillKind = 'panel-close';
-        hoveredEmail = closeBtn;
-      } else if (emailLink) {
-        const r = emailLink.getBoundingClientRect();
-        pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
-        pillKind = 'email';
-        hoveredEmail = emailLink;
-      } else {
-        pillTarget = null;
+      if (!hit) {
+        pillActive = false;
         pillKind = null;
         hoveredEmail = null;
+      } else {
+        const r = hit.getBoundingClientRect();
+        pillRect.x = r.left; pillRect.y = r.top;
+        pillRect.w = r.width; pillRect.h = r.height;
+        pillActive = true;
+        if (hit.classList.contains('work-panel-close')) {
+          pillKind = 'panel-close';
+          hoveredEmail = hit;
+        } else if (hit.classList.contains('contact-email')) {
+          pillKind = 'email';
+          hoveredEmail = hit;
+        } else {
+          pillKind = 'nav';
+          hoveredEmail = null;
+        }
       }
       schedule();
     };
 
+    // Nav lives in fixed positioning so its rect doesn't change with scroll.
+    // Only email/panel-close pills need re-syncing — and `tick()` already
+    // re-reads their rects each frame, so all this needs to do is wake the
+    // loop. No `:hover` queries (those force expensive style recalcs).
     const recompute = () => {
-      const navHovered   = document.querySelector<HTMLElement>('.nav-links a:hover');
-      const emailHovered = document.querySelector<HTMLElement>('.contact-email:hover');
-      const closeHovered = document.querySelector<HTMLElement>('.work-panel-close:hover');
-      const hovered = navHovered ?? closeHovered ?? emailHovered;
-      if (hovered) {
-        const r = hovered.getBoundingClientRect();
-        pillTarget = { x: r.left, y: r.top, w: r.width, h: r.height };
-        pillKind = navHovered ? 'nav' : closeHovered ? 'panel-close' : 'email';
-        hoveredEmail = (closeHovered ?? emailHovered) ?? null;
-        schedule();
-      }
+      if (pillKind === 'email' || pillKind === 'panel-close') schedule();
     };
 
     const onPalette = () => {
-      // Refresh from whatever is currently under the cursor so scoped palettes
-      // (nav, work-portal) are honored — falling back to documentElement.
+      lastScope = null; // force re-read on next refreshPaletteFor
       const hovered = document.elementFromPoint(mx, my);
-      refreshPalette(hovered);
+      refreshPaletteFor(hovered);
       schedule();
     };
 
