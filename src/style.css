@@ -115,14 +115,14 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
 /* Nav ---------------------------------------------------------------- */
 
 .nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 70;
   padding: 22px var(--gutter);
   display: flex; align-items: center; gap: 56px;
   pointer-events: none;
   color: var(--ink);
-  transition: color 0.35s ease;
+  transition: color 0.18s ease;
 }
-.nav a { transition: color 0.35s ease; }
+.nav a { transition: color 0.18s ease; }
 .brand-orbit {
   width: 40px;
   height: 40px;
@@ -372,7 +372,10 @@ main {
 
 section {
   position: relative;
-  scroll-margin-top: 80px;
+  /* Negative offset compensates for the section title's 120px padding-top so
+     on nav-click the title lands at the navbar's bottom (~84px) rather than
+     ~200px down the viewport. Natural scrolling is unaffected. */
+  scroll-margin-top: -36px;
   padding: 0 var(--gutter) 200px;
   z-index: 10;
 }
@@ -453,12 +456,40 @@ section {
   padding-right: 48px;
 }
 .work-row .num {
+  position: relative;
+  display: inline-block;
+  width: fit-content;
+  justify-self: start;
   font-family: var(--body);
   font-size: 13px;
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.08em;
   transition: color 0.3s ease;
+}
+.work-row .num-text {
+  position: relative;
+  z-index: 1;
+}
+.work-row .num-star {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 38px;
+  height: 38px;
+  color: var(--accent);
+  transform: translate(-50%, -50%) scale(0) rotate(-90deg);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+  transition:
+    transform 0.45s var(--ease-soft),
+    opacity 0.3s ease;
+}
+.work-row:hover .num-star,
+.work-row-wrap.is-open .num-star {
+  transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  opacity: 1;
 }
 .work-row .title {
   font-family: var(--display);
@@ -486,8 +517,8 @@ section {
   transition: color 0.3s ease;
 }
 .work-row:hover .num,
+.work-row-wrap.is-open .num { color: var(--ink); }
 .work-row:hover .year,
-.work-row-wrap.is-open .num,
 .work-row-wrap.is-open .year { color: var(--accent); }
 .rule-row {
   width: 100%;
@@ -609,11 +640,11 @@ footer.is-grown .bg-flower-stem {
 }
 .work-panel.is-open .bg-flower-leaf--right,
 footer.is-grown .bg-flower-leaf--right {
-  animation: leaf-grow-right 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--leaf-delay, 0.3s) forwards;
+  animation: leaf-grow-right 0.5s cubic-bezier(0.22, 1, 0.36, 1) var(--leaf-delay, 0.3s) forwards;
 }
 .work-panel.is-open .bg-flower-leaf--left,
 footer.is-grown .bg-flower-leaf--left {
-  animation: leaf-grow-left 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--leaf-delay, 0.3s) forwards;
+  animation: leaf-grow-left 0.5s cubic-bezier(0.22, 1, 0.36, 1) var(--leaf-delay, 0.3s) forwards;
 }
 @keyframes leaf-grow-right {
   to { opacity: 1; transform: rotate(-30deg) scale(1); }
@@ -624,21 +655,23 @@ footer.is-grown .bg-flower-leaf--left {
 .bg-flower-star {
   position: absolute;
   left: 50%;
-  top: 0;
+  top: 100%;
   width: var(--star-size, 18px);
   height: var(--star-size, 18px);
   color: var(--accent);
-  transform: translate(-50%, -100%) scale(0);
+  transform: translate(-50%, -100%) scale(0.15);
   transform-origin: 50% 100%;
   display: block;
   opacity: 0;
 }
 .work-panel.is-open .bg-flower-star,
 footer.is-grown .bg-flower-star {
-  animation: star-bloom 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) calc(var(--grow, 2s) * 0.7) forwards;
+  animation: star-bloom var(--grow, 2s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 @keyframes star-bloom {
-  to { transform: translate(-50%, -100%) scale(1); opacity: 1; }
+  0%   { top: 100%; transform: translate(-50%, -100%) scale(0.15); opacity: 0; }
+  15%  { opacity: 1; }
+  100% { top: 0%;   transform: translate(-50%, -100%) scale(1);    opacity: 1; }
 }
 
 /* Side drawer — fixed-position panel slides in from the right. The works list
@@ -649,7 +682,7 @@ footer.is-grown .bg-flower-star {
   background: rgba(68, 91, 75, 0.18);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.4s var(--ease-soft);
+  transition: opacity 0.25s var(--ease-soft);
   z-index: 50;
 }
 .work-panel-backdrop.is-open {
@@ -668,8 +701,9 @@ footer.is-grown .bg-flower-star {
   transform: translateX(100%);
   visibility: hidden;
   transition:
-    transform 0.5s var(--ease-soft),
-    visibility 0s linear 0.5s;
+    transform 0.25s var(--ease-soft),
+    visibility 0s linear 0.25s,
+    background-color 0.25s ease;
   overflow: hidden;
   overscroll-behavior: contain;
 }
@@ -677,8 +711,47 @@ footer.is-grown .bg-flower-star {
   transform: translateX(0);
   visibility: visible;
   transition:
-    transform 0.5s var(--ease-soft),
-    visibility 0s linear 0s;
+    transform 0.25s var(--ease-soft),
+    visibility 0s linear 0s,
+    background-color 0.25s ease;
+}
+/* Each cycled project renders as its own layer absolutely-positioned inside
+   the panel so we can slide the leaving and incoming layers past each other
+   vertically when scrolling between projects. */
+.work-panel-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+}
+.work-panel-layer-leaving.cycle-next {
+  animation: panel-layer-leave-up 0.26s var(--ease-soft) forwards;
+}
+.work-panel-layer-current.cycle-next {
+  animation: panel-layer-enter-up 0.26s var(--ease-soft) forwards;
+}
+.work-panel-layer-leaving.cycle-prev {
+  animation: panel-layer-leave-down 0.26s var(--ease-soft) forwards;
+}
+.work-panel-layer-current.cycle-prev {
+  animation: panel-layer-enter-down 0.26s var(--ease-soft) forwards;
+}
+@keyframes panel-layer-leave-up {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-100%); }
+}
+@keyframes panel-layer-enter-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes panel-layer-leave-down {
+  from { transform: translateY(0); }
+  to   { transform: translateY(100%); }
+}
+@keyframes panel-layer-enter-down {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(0); }
 }
 .work-panel-inner {
   position: relative;
@@ -711,9 +784,9 @@ footer.is-grown .bg-flower-star {
   pointer-events: none;
   transform: translateX(40px);
   transition:
-    color 0.35s var(--ease-soft),
-    opacity 0.35s var(--ease-soft),
-    transform 0.5s var(--ease-soft);
+    color 0.25s var(--ease-soft),
+    opacity 0.25s var(--ease-soft),
+    transform 0.25s var(--ease-soft);
 }
 .work-panel-close.is-open {
   opacity: 1;
@@ -735,14 +808,92 @@ footer.is-grown .bg-flower-star {
   opacity: 0;
   z-index: -1;
   transition:
-    transform 0.45s var(--ease-soft),
-    opacity 0.32s var(--ease-soft);
+    transform 0.25s var(--ease-soft),
+    opacity 0.25s var(--ease-soft);
 }
 @media (pointer: coarse) {
   .work-panel-close:hover::before {
     transform: scale(1);
     opacity: 1;
   }
+}
+
+/* Project indicator dots — sit just below the close button, one per project.
+   The active project's dot morphs into a Star in the project's accent color. */
+.work-portal-dots {
+  position: fixed;
+  top: 156px;
+  right: 35px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  z-index: 62;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(40px);
+  transition:
+    opacity 0.25s var(--ease-soft),
+    transform 0.25s var(--ease-soft);
+}
+.work-portal-dots.is-open {
+  opacity: 1;
+  transform: translateX(0);
+}
+.work-portal-dots li { list-style: none; }
+.work-portal-dot {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  cursor: none;
+  pointer-events: none;
+}
+.work-portal-dots.is-open .work-portal-dot { pointer-events: auto; }
+.work-portal-dot-mark {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink);
+  opacity: 0.45;
+  transform: scale(1);
+  transition:
+    opacity 0.35s var(--ease-soft),
+    transform 0.4s var(--ease-soft),
+    background-color 0.25s ease;
+}
+.work-portal-dot-star {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+  display: block;
+  /* Start matching the dot's size (7/22 ≈ 0.32) so the star grows out of it */
+  transform: scale(0.32) rotate(-30deg);
+  opacity: 0;
+  transition:
+    transform 0.4s var(--ease-soft),
+    opacity 0.35s var(--ease-soft),
+    color 0.25s ease;
+}
+.work-portal-dot.is-active .work-portal-dot-mark {
+  opacity: 0;
+  /* Grow the dot up to the star's footprint as it fades out */
+  transform: scale(3.14);
+}
+.work-portal-dot.is-active .work-portal-dot-star {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
 }
 .work-panel-content {
   position: relative;
@@ -1071,9 +1222,10 @@ footer.is-grown .bg-flower-star {
 
 footer {
   position: relative;
-  /* Top padding must clear the tallest stem (22vh) plus the star (which sits
-     above the stem and extends up to ~80px). */
-  padding: calc(22vh + 80px) var(--gutter) 28px;
+  /* Tightened so the flower bed hugs the bottom of the contact section.
+     Tall stems can poke a bit above the footer's top edge — that reads as
+     flowers extending up into the contact area, on purpose. */
+  padding: calc(14vh + 16px) var(--gutter) 28px;
   font-family: var(--body);
   font-size: 11px;
   color: var(--ink-soft);
@@ -1083,7 +1235,9 @@ footer {
   justify-content: space-between;
   align-items: flex-end;
   gap: 24px;
-  overflow: hidden;
+  /* overflow visible so tall stems and their stars can extend up into the
+     contact section's bottom padding rather than getting clipped. */
+  overflow: visible;
 }
 
 .footer-copy {

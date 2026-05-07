@@ -55,7 +55,7 @@ export default function Cursor() {
 
     let mx = -200, my = -200;
     let pillTarget: { x: number; y: number; w: number; h: number } | null = null;
-    // 'nav' keeps cursor behind fixed nav (z-index 39 < nav 40)
+    // 'nav' keeps cursor behind fixed nav (z-index 69 < nav 70)
     // 'email' uses z-index 5 so <main> content (z-index 10+) always paints on top
     // 'panel-close' sits above the work panel (z-index 60); SVG inside the button paints on top via its own stacking context
     let pillKind: 'nav' | 'email' | 'panel-close' | null = null;
@@ -74,8 +74,12 @@ export default function Cursor() {
 
     let INK: [number, number, number] = INK_FALLBACK;
     let ACCENT: [number, number, number] = ACCENT_FALLBACK;
-    const refreshPalette = () => {
-      const cs = getComputedStyle(document.documentElement);
+    // Read --ink/--accent from the element under the cursor so the cursor
+    // picks up scoped palettes (nav has its own vars, work-portal has the
+    // active project's vars). Falls back to documentElement.
+    const refreshPalette = (sourceEl?: Element | null) => {
+      const source = sourceEl ?? document.documentElement;
+      const cs = getComputedStyle(source);
       INK = parseColor(cs.getPropertyValue('--ink')) ?? INK_FALLBACK;
       ACCENT = parseColor(cs.getPropertyValue('--accent')) ?? ACCENT_FALLBACK;
     };
@@ -141,7 +145,7 @@ export default function Cursor() {
           // has its own stacking context (z-index 2 with isolation) so it paints on top.
           el.style.zIndex = '61';
         } else if (ct > 0.5) {
-          el.style.zIndex = '39';
+          el.style.zIndex = '69';
         } else {
           el.style.zIndex = '1000';
         }
@@ -174,6 +178,7 @@ export default function Cursor() {
 
     const onOver = (e: PointerEvent) => {
       const el = (e.target as Element | null);
+      refreshPalette(el);
       const navLink  = el?.closest<HTMLElement>('.nav-links a');
       const emailLink = el?.closest<HTMLElement>('.contact-email');
       const closeBtn = el?.closest<HTMLElement>('.work-panel-close');
@@ -216,7 +221,10 @@ export default function Cursor() {
     };
 
     const onPalette = () => {
-      refreshPalette();
+      // Refresh from whatever is currently under the cursor so scoped palettes
+      // (nav, work-portal) are honored — falling back to documentElement.
+      const hovered = document.elementFromPoint(mx, my);
+      refreshPalette(hovered);
       schedule();
     };
 

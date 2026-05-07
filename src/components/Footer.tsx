@@ -8,7 +8,7 @@ export default function Footer() {
   // Slots are confined to the middle band so flowers don't overlap the
   // back-to-top button on the left or the copyright text on the right.
   const flowers = useMemo<Flower[]>(
-    () => generateFlowers([24, 40, 56, 72], 3),
+    () => generateFlowers([22, 36, 50, 64, 78], 3),
     [],
   );
 

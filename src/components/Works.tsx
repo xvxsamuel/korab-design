@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import StarFlat from '../assets/starflat.svg?react';
 import Cogs from './Cogs';
 
 type Project = {
@@ -81,19 +82,49 @@ export default function Works() {
   // Holds the project data while the panel is sliding out, so children
   // stay mounted (and visible) for the duration of the close transition.
   const [displayed, setDisplayed] = useState<Project | null>(null);
+  // While cycling between projects, the outgoing project is kept around so
+  // we can render two stacked layers and animate them past each other.
+  const [outgoing, setOutgoing] = useState<Project | null>(null);
+  const [cycleDir, setCycleDir] = useState<'next' | 'prev' | null>(null);
   const triggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const lastTriggerRef = useRef<string | null>(null);
+  const prevOpenRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const prevOpen = prevOpenRef.current;
+    prevOpenRef.current = open;
+
+    if (open && prevOpen && open !== prevOpen) {
+      // Cycling between two open projects — push old layer out, slide new in.
+      const oldIdx = projects.findIndex((p) => p.n === prevOpen);
+      const newIdx = projects.findIndex((p) => p.n === open);
+      const oldProject = projects[oldIdx] ?? null;
+      const newProject = projects[newIdx] ?? null;
+      if (oldProject) setOutgoing(oldProject);
+      if (newProject) setDisplayed(newProject);
+      setCycleDir(newIdx > oldIdx ? 'next' : 'prev');
+      lastTriggerRef.current = open;
+      const t = window.setTimeout(() => {
+        setOutgoing(null);
+        setCycleDir(null);
+      }, 270);
+      return () => window.clearTimeout(t);
+    }
+
     if (open) {
+      // Opening from closed.
       const project = projects.find((p) => p.n === open) ?? null;
       setDisplayed(project);
+      setOutgoing(null);
+      setCycleDir(null);
       lastTriggerRef.current = open;
       return;
     }
-    // Keep current displayed data through the slide-out, then clear after
-    // the CSS transition (matches the 0.5s transform in style.css).
-    const t = window.setTimeout(() => setDisplayed(null), 500);
+
+    // Closing — keep displayed mounted through the horizontal slide-out.
+    setOutgoing(null);
+    setCycleDir(null);
+    const t = window.setTimeout(() => setDisplayed(null), 250);
     return () => window.clearTimeout(t);
   }, [open]);
 
@@ -113,36 +144,117 @@ export default function Works() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
     };
+    const onExternalClose = () => close();
     window.addEventListener('keydown', onKey);
+    window.addEventListener('works:close', onExternalClose);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('works:close', onExternalClose);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Push the open project's palette onto the document root so all UI (nav,
-  // panel, cursor, anything that reads var(--bg|--ink|--accent)) reflects it.
-  // Tied to `displayed` (not `open`) so the colors persist through the
-  // slide-out transition.
+  // While the panel is open, route wheel scroll into project navigation:
+  // accumulating ~ACCUM_THRESHOLD of deltaY advances to the next project,
+  // and scrolling past the last/first project closes the panel.
   useEffect(() => {
-    const root = document.documentElement;
-    if (displayed) {
-      root.style.setProperty('--bg', displayed.bg);
-      root.style.setProperty('--ink', displayed.ink);
-      root.style.setProperty('--accent', displayed.accent);
+    if (!open) return;
+
+    const ACCUM_THRESHOLD = 140;
+    const COOLDOWN_MS = 280;
+    let accumulated = 0;
+    let lastAction = Date.now();
+
+    const onWheel = (e: WheelEvent) => {
+      const now = Date.now();
+      if (now - lastAction < COOLDOWN_MS) {
+        accumulated = 0;
+        return;
+      }
+      accumulated += e.deltaY;
+      if (Math.abs(accumulated) < ACCUM_THRESHOLD) return;
+
+      const direction = accumulated > 0 ? 1 : -1;
+      accumulated = 0;
+      lastAction = now;
+
+      const idx = projects.findIndex((p) => p.n === open);
+      const nextIdx = idx + direction;
+      if (nextIdx < 0 || nextIdx >= projects.length) {
+        close();
+      } else {
+        setOpen(projects[nextIdx].n);
+      }
+    };
+
+    window.addEventListener('wheel', onWheel, { passive: true });
+    return () => window.removeEventListener('wheel', onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Push the open project's palette onto the nav (only). Track `open`, not
+  // `displayed`, so the nav resets instantly when closing — the panel keeps
+  // its own inline palette during the slide-out via the portal wrapper.
+  useEffect(() => {
+    const nav = document.querySelector<HTMLElement>('.nav');
+    if (!nav) return;
+    const current = open ? projects.find((p) => p.n === open) : null;
+    if (current) {
+      nav.style.setProperty('--bg', current.bg);
+      nav.style.setProperty('--ink', current.ink);
+      nav.style.setProperty('--accent', current.accent);
     } else {
-      root.style.removeProperty('--bg');
-      root.style.removeProperty('--ink');
-      root.style.removeProperty('--accent');
+      nav.style.removeProperty('--bg');
+      nav.style.removeProperty('--ink');
+      nav.style.removeProperty('--accent');
     }
     window.dispatchEvent(new Event('palette-change'));
-  }, [displayed]);
+  }, [open]);
 
   const toggle = (n: string) => setOpen((cur) => (cur === n ? null : n));
 
   const isOpen = open !== null;
   const project = displayed;
+
+  const renderLayer = (p: Project, status: 'leaving' | 'current') => (
+    <div
+      key={`${status}-${p.n}`}
+      className={`work-panel-layer work-panel-layer-${status}${cycleDir ? ` cycle-${cycleDir}` : ''}`}
+      style={{ background: p.bg }}
+    >
+      <div className="work-panel-inner">
+        <div className="work-panel-content">
+          <div className="work-panel-text">
+            <span className="work-panel-num">{p.n}</span>
+            <h3 className="work-panel-title">{p.name}</h3>
+            <p className="work-panel-blurb">{p.blurb}</p>
+            <p className="work-panel-body">{p.body}</p>
+            <dl className="work-panel-meta">
+              <div>
+                <dt>Role</dt>
+                <dd>{p.role}</dd>
+              </div>
+              <div>
+                <dt>Year</dt>
+                <dd>{p.year}</dd>
+              </div>
+              <div>
+                <dt>Scope</dt>
+                <dd>{p.tags}</dd>
+              </div>
+            </dl>
+            <Cogs />
+          </div>
+          <div className="work-panel-images">
+            <div className="work-image-placeholder wide" />
+            <div className="work-image-placeholder" />
+            <div className="work-image-placeholder tall" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <section id="works" className="works">
@@ -165,7 +277,10 @@ export default function Works() {
                   aria-haspopup="dialog"
                 >
                   <span className="work-main">
-                    <span className="num">{p.n}</span>
+                    <span className="num">
+                      <span className="num-text">{p.n}</span>
+                      <StarFlat className="num-star" aria-hidden="true" />
+                    </span>
                     <span className="title">
                       {p.name} <span className="role">— {p.role}</span>
                     </span>
@@ -180,61 +295,42 @@ export default function Works() {
         })}
       </ul>
 
-      <div
-        className={`work-panel-backdrop${isOpen ? ' is-open' : ''}`}
-        onClick={close}
-        aria-hidden={!isOpen}
-      />
-      <aside
-        id={PANEL_ID}
-        className={`work-panel${isOpen ? ' is-open' : ''}`}
-        style={project ? { background: project.bg } : undefined}
-        aria-hidden={!isOpen}
-        role="dialog"
-        aria-modal="true"
-        aria-label={project ? `${project.name} details` : 'Project details'}
-      >
-        {project && (
-          <div className="work-panel-inner">
-            <div className="work-panel-content">
-              <div className="work-panel-text">
-                <span className="work-panel-num">{project.n}</span>
-                <h3 className="work-panel-title">{project.name}</h3>
-                <p className="work-panel-blurb">{project.blurb}</p>
-                <p className="work-panel-body">{project.body}</p>
-                <dl className="work-panel-meta">
-                  <div>
-                    <dt>Role</dt>
-                    <dd>{project.role}</dd>
-                  </div>
-                  <div>
-                    <dt>Year</dt>
-                    <dd>{project.year}</dd>
-                  </div>
-                  <div>
-                    <dt>Scope</dt>
-                    <dd>{project.tags}</dd>
-                  </div>
-                </dl>
-                <Cogs />
-              </div>
-              <div className="work-panel-images">
-                <div className="work-image-placeholder wide" />
-                <div className="work-image-placeholder" />
-                <div className="work-image-placeholder tall" />
-              </div>
-            </div>
-          </div>
-        )}
-      </aside>
-      {project &&
-        createPortal(
+      {createPortal(
+        <div
+          className="work-portal"
+          style={
+            project
+              ? ({
+                  '--bg': project.bg,
+                  '--ink': project.ink,
+                  '--accent': project.accent,
+                } as React.CSSProperties)
+              : undefined
+          }
+        >
+          <div
+            className={`work-panel-backdrop${isOpen ? ' is-open' : ''}`}
+            onClick={close}
+            aria-hidden={!isOpen}
+          />
+          <aside
+            id={PANEL_ID}
+            className={`work-panel${isOpen ? ' is-open' : ''}`}
+            aria-hidden={!isOpen}
+            role="dialog"
+            aria-modal="true"
+            aria-label={project ? `${project.name} details` : 'Project details'}
+          >
+            {outgoing && renderLayer(outgoing, 'leaving')}
+            {project && renderLayer(project, 'current')}
+          </aside>
           <button
             type="button"
             className={`work-panel-close${isOpen ? ' is-open' : ''}`}
             onClick={close}
             aria-label="Close"
             aria-controls={PANEL_ID}
+            aria-hidden={!isOpen}
             tabIndex={isOpen ? 0 : -1}
           >
             <svg
@@ -252,9 +348,30 @@ export default function Works() {
               <path d="M18 6 6 18" />
               <path d="m6 6 12 12" />
             </svg>
-          </button>,
-          document.body,
-        )}
+          </button>
+          <ol
+            className={`work-portal-dots${isOpen ? ' is-open' : ''}`}
+            aria-label="Project navigation"
+          >
+            {projects.map((p) => (
+              <li key={p.n}>
+                <button
+                  type="button"
+                  className={`work-portal-dot${p.n === open ? ' is-active' : ''}`}
+                  onClick={() => setOpen(p.n)}
+                  aria-label={`View ${p.name}`}
+                  aria-current={p.n === open ? 'true' : undefined}
+                  tabIndex={isOpen ? 0 : -1}
+                >
+                  <span className="work-portal-dot-mark" />
+                  <StarFlat className="work-portal-dot-star" />
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>,
+        document.body,
+      )}
     </section>
   );
 }

@@ -16,15 +16,17 @@ export function generateFlowers(slotPositions: number[], jitter = 2): Flower[] {
     const j = Math.floor(Math.random() * (i + 1));
     [slots[i], slots[j]] = [slots[j], slots[i]];
   }
-  const minStem = 12;
+  const minStem = 6;
   const maxStem = 22;
   const flip = (s: 'right' | 'left'): 'right' | 'left' => (s === 'right' ? 'left' : 'right');
   return slots.map((slot) => {
     const stemVh = minStem + Math.random() * (maxStem - minStem);
     const norm = (stemVh - minStem) / (maxStem - minStem);
-    const sizeJitter = (Math.random() - 0.5) * 14;
-    const starPx = Math.max(34, 42 + norm * 28 + sizeJitter);
-    const grow = 1.6 + Math.random() * 0.6;
+    const sizeJitter = (Math.random() - 0.5) * 26;
+    const starPx = Math.max(34, 54 + norm * 12 + sizeJitter);
+    // Tall flowers take longer to grow than short ones, with a small jitter
+    // on top so equal-height stems don't animate in lockstep.
+    const grow = 1.0 + norm * 1.4 + (Math.random() - 0.5) * 0.4;
     // Leaf count scales with stem height: short stems get 1, tall stems up to 3.
     const leafCount = Math.max(1, Math.round(1 + norm * 2));
     // Leaves scale with the flower (starPx) so they look proportional —
@@ -82,7 +84,7 @@ export default function BackgroundFlowers({ flowers, className = 'work-panel-flo
                   bottom: `${leaf.y}%`,
                   width: `${leaf.len}px`,
                   height: `${leaf.len * 0.42}px`,
-                  '--leaf-delay': `${(leaf.y / 100) * f.grow}s`,
+                  '--leaf-delay': `${0.64 * (1 - Math.pow(1 - leaf.y / 100, 1 / 3)) * f.grow}s`,
                 } as CSSVars}
                 aria-hidden="true"
               >

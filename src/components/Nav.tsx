@@ -3,14 +3,24 @@ type NavProps = {
 };
 
 const links = [
-  { id: 'works',   label: 'works' },
   { id: 'about',   label: 'about' },
+  { id: 'works',   label: 'works' },
 ];
 
 export default function Nav({ active }: NavProps) {
   const go = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
     e.preventDefault();
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const scroll = () =>
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // If the works panel is open, close it first so the sideways slide-out
+    // plays before we scroll to the target section.
+    const panelOpen = document.querySelector('.work-panel.is-open');
+    if (panelOpen) {
+      window.dispatchEvent(new CustomEvent('works:close'));
+      window.setTimeout(scroll, 250);
+    } else {
+      scroll();
+    }
   };
 
   return (
