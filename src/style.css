@@ -228,7 +228,9 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   transform: translateY(-60%) rotate(-12deg);
   opacity: 0;
   color: var(--bg);
-  transition-delay: calc(var(--i) * 28ms);
+  /* Hover-in: zero delay so all chars leave together. Hover-out falls back
+     to the base rule's staggered delay, so chars return one-by-one. */
+  transition-delay: 0s;
 }
 
 /* alt label: "let's talk" slides in from below with a slight delay */
@@ -652,11 +654,13 @@ footer.is-grown .bg-flower-stem {
 }
 .bg-flower-leaf--right {
   left: 50%;
+  margin-left: 1px;
   transform-origin: 0 50%;
   transform: rotate(-30deg) scale(0);
 }
 .bg-flower-leaf--left {
   right: 50%;
+  margin-right: 1px;
   transform-origin: 100% 50%;
   transform: rotate(30deg) scale(0);
 }
@@ -1165,11 +1169,6 @@ footer.is-grown .bg-flower-star {
   display: inline-block;
   transition: color 0.32s var(--ease-soft);
   transition-delay: calc(var(--i) * 22ms);
-}
-/* Hover-in: zero delay so all chars shift together. Hover-out falls back to
-   the base rule's staggered delay, so chars return one-by-one. */
-.contact-email:hover .contact-email-char {
-  transition-delay: 0s;
 }
 
 /* Arrow icon — hidden until hover, slides in from left */
