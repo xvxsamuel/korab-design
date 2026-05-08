@@ -621,7 +621,7 @@ section {
   left: 50%;
   bottom: 0;
   top: 0;
-  width: 1.5px;
+  width: 1px;
   background: var(--rule);
   transform: translateX(-50%) scaleY(0);
   transform-origin: bottom center;
@@ -908,6 +908,9 @@ footer.is-grown .bg-flower-star {
     opacity 0.35s var(--ease-soft),
     color 0.25s ease;
 }
+.work-portal-dot:not(.is-active):hover .work-portal-dot-mark {
+  opacity: 1;
+}
 .work-portal-dot.is-active .work-portal-dot-mark {
   opacity: 0;
   /* Grow the dot up to the star's footprint as it fades out */
@@ -1162,6 +1165,11 @@ footer.is-grown .bg-flower-star {
   display: inline-block;
   transition: color 0.32s var(--ease-soft);
   transition-delay: calc(var(--i) * 22ms);
+}
+/* Hover-in: zero delay so all chars shift together. Hover-out falls back to
+   the base rule's staggered delay, so chars return one-by-one. */
+.contact-email:hover .contact-email-char {
+  transition-delay: 0s;
 }
 
 /* Arrow icon — hidden until hover, slides in from left */

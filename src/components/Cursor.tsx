@@ -56,7 +56,8 @@ export default function Cursor() {
     // 'nav' keeps cursor behind fixed nav (z-index 69 < nav 70)
     // 'email' uses z-index 5 so <main> content (z-index 10+) always paints on top
     // 'panel-close' sits above the work panel (z-index 60); SVG inside the button paints on top via its own stacking context
-    let pillKind: 'nav' | 'email' | 'panel-close' | null = null;
+    // 'work-dot' sits below the work-portal-dots container (z-index 62) so the dot mark/star paints over the pill
+    let pillKind: 'nav' | 'email' | 'panel-close' | 'work-dot' | null = null;
     // live reference to the hovered email element so we can re-read its rect each frame
     let hoveredEmail: HTMLElement | null = null;
 
@@ -138,6 +139,7 @@ export default function Cursor() {
         const z =
           pillKind === 'email' ? 5 :
           pillKind === 'panel-close' ? 61 :
+          pillKind === 'work-dot' ? 61 :
           ct > 0.5 ? 69 : 1000;
         if (z !== lastZ) {
           s.zIndex = `${z}`;
@@ -176,7 +178,7 @@ export default function Cursor() {
       // Resolve the closest interactive container in a single tree walk so we
       // don't run three separate .closest() calls per pointerover.
       const hit = el?.closest<HTMLElement>(
-        '.nav-links a, .contact-email, .work-panel-close',
+        '.nav-links a, .contact-email, .work-panel-close, .work-portal-dot:not(.is-active)',
       ) ?? null;
 
       if (!hit) {
@@ -194,6 +196,17 @@ export default function Cursor() {
         } else if (hit.classList.contains('contact-email')) {
           pillKind = 'email';
           hoveredEmail = hit;
+        } else if (hit.classList.contains('work-portal-dot')) {
+          pillKind = 'work-dot';
+          hoveredEmail = null;
+          // Snap the pill to the visible 7px mark, not the 22px hit zone, so
+          // the cursor merges into the dot itself instead of forming a halo.
+          const mark = hit.querySelector('.work-portal-dot-mark') as HTMLElement | null;
+          if (mark) {
+            const mr = mark.getBoundingClientRect();
+            pillRect.x = mr.left; pillRect.y = mr.top;
+            pillRect.w = mr.width; pillRect.h = mr.height;
+          }
         } else {
           pillKind = 'nav';
           hoveredEmail = null;

@@ -1,11 +1,14 @@
 import { useLayoutEffect } from 'react';
 
-const SUN_PATH = [
-  { t: 0.0,  x: 92, y: 72 },
-  { t: 0.33, x: 52, y: 14 },
-  { t: 0.66, x: 32, y: 16 },
-  { t: 1.0,  x: 8,  y: 28 },
-] as const;
+// Quadratic bezier: start → control → end. The control point sits above the
+// viewport so the curve arcs up and over like a sun crossing the sky, with no
+// waypoint kinks to make the motion feel choppy.
+const SUN_START   = { x: 92, y: 72 };
+const SUN_CONTROL = { x: 50, y: -20 };
+const SUN_END     = { x: 8,  y: 28 };
+
+// Kept for the end-position lookup elsewhere in this file.
+const SUN_PATH = [SUN_START, SUN_END] as const;
 
 // Fraction of the full arc each star travels by the time you reach the bottom.
 const STAR_ARC_SCALE   = 0.75;
@@ -23,15 +26,10 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 function sampleSun(p: number): { x: number; y: number } {
   const c = Math.max(0, Math.min(1, p));
-  for (let i = 0; i < SUN_PATH.length - 1; i++) {
-    const a = SUN_PATH[i], b = SUN_PATH[i + 1];
-    if (c >= a.t && c <= b.t) {
-      const local = (c - a.t) / (b.t - a.t);
-      const e = local < 0.5 ? 2 * local * local : 1 - Math.pow(-2 * local + 2, 2) / 2;
-      return { x: lerp(a.x, b.x, e), y: lerp(a.y, b.y, e) };
-    }
-  }
-  return { x: SUN_PATH[SUN_PATH.length - 1].x, y: SUN_PATH[SUN_PATH.length - 1].y };
+  const u = 1 - c;
+  const x = u * u * SUN_START.x + 2 * u * c * SUN_CONTROL.x + c * c * SUN_END.x;
+  const y = u * u * SUN_START.y + 2 * u * c * SUN_CONTROL.y + c * c * SUN_END.y;
+  return { x, y };
 }
 
 // Place a fixed star at viewport coords (vx, vy), centered.
