@@ -134,7 +134,7 @@ export default function Footer() {
   }, []);
 
   const backToTop = () => {
-    document.getElementById('home')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
