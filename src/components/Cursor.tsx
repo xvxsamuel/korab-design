@@ -11,7 +11,8 @@ function lerpColor(a: [number,number,number], b: [number,number,number], t: numb
   return `rgb(${r},${g},${bl})`;
 }
 
-// --ink: #445b4b   --accent (star yellow): #d79554
+// --bg: #F3DBC3   --ink: #445b4b   --accent: #d79554
+const BG_FALLBACK:     [number,number,number] = [243, 219, 195];
 const INK_FALLBACK:    [number,number,number] = [68,  91,  75];
 const ACCENT_FALLBACK: [number,number,number] = [215, 149, 84];
 
@@ -36,6 +37,23 @@ function parseColor(input: string): [number, number, number] | null {
     }
   }
   return null;
+}
+
+// The cursor uses mix-blend-mode: difference, so its rendered color over the
+// page bg is |source − bg|. To make the cursor APPEAR as `target` against
+// the bg, we set its source to `bg − target` (clamped). Over the bg this
+// resolves to the target color; over ink text it produces a contrasting tint
+// that keeps text shapes visible underneath rather than disappearing into a
+// same-color blob.
+function preBlend(
+  bg: [number,number,number],
+  target: [number,number,number],
+): [number,number,number] {
+  return [
+    Math.max(0, Math.min(255, bg[0] - target[0])),
+    Math.max(0, Math.min(255, bg[1] - target[1])),
+    Math.max(0, Math.min(255, bg[2] - target[2])),
+  ];
 }
 
 export default function Cursor() {
@@ -71,18 +89,33 @@ export default function Cursor() {
 
     let raf = 0;
     let running = false;
+    let lastBlend: '' | 'normal' | 'difference' = '';
 
-    let INK: [number, number, number] = INK_FALLBACK;
-    let ACCENT: [number, number, number] = ACCENT_FALLBACK;
+    // Two palettes are tracked per scope so the cursor can switch blend modes
+    // without recomputing colours each frame:
+    //   - PRE-BLEND values resolve to real ink/accent under mix-blend-mode:
+    //     difference (used in dot mode, so the dot stays legible over text).
+    //   - REAL values are painted directly under mix-blend-mode: normal (used
+    //     in pill mode, so the orange bubble fully covers the sun/orbit/star
+    //     graphics behind it instead of difference-blending with them).
+    let INK: [number, number, number] = preBlend(BG_FALLBACK, INK_FALLBACK);
+    let ACCENT: [number, number, number] = preBlend(BG_FALLBACK, ACCENT_FALLBACK);
+    let INK_REAL: [number, number, number] = INK_FALLBACK;
+    let ACCENT_REAL: [number, number, number] = ACCENT_FALLBACK;
     // Scoped palettes only exist on .nav and .work-portal — refresh only when
     // crossing into / out of one of those subtrees. Avoids running
-    // getComputedStyle on every pointerover (one per element under the cursor).
+    // getComputedStyle on every pointerover.
     let lastScope: Element | null = null;
     const refreshPalette = (sourceEl?: Element | null) => {
       const source = sourceEl ?? document.documentElement;
       const cs = getComputedStyle(source);
-      INK = parseColor(cs.getPropertyValue('--ink')) ?? INK_FALLBACK;
-      ACCENT = parseColor(cs.getPropertyValue('--accent')) ?? ACCENT_FALLBACK;
+      const bg     = parseColor(cs.getPropertyValue('--bg'))     ?? BG_FALLBACK;
+      const ink    = parseColor(cs.getPropertyValue('--ink'))    ?? INK_FALLBACK;
+      const accent = parseColor(cs.getPropertyValue('--accent')) ?? ACCENT_FALLBACK;
+      INK_REAL    = ink;
+      ACCENT_REAL = accent;
+      INK    = preBlend(bg, ink);
+      ACCENT = preBlend(bg, accent);
     };
     const refreshPaletteFor = (el: Element | null | undefined) => {
       const scope = (el?.closest('.nav, .work-portal') as Element | null) ?? null;
@@ -129,7 +162,21 @@ export default function Cursor() {
         s.width  = `${cw}px`;
         s.height = `${ch}px`;
         s.borderRadius = `${cr}px`;
-        s.background = lerpColor(INK, ACCENT, ct);
+
+        // Pill mode paints the real palette under mix-blend-mode: normal so
+        // the bubble is fully opaque and visually covers anything beneath it
+        // (specifically the sun/orbit/star graphics at z-index 1-2 — they
+        // would otherwise show through a difference-blended pill). Dot mode
+        // keeps the pre-blended palette + difference so the small dot stays
+        // legible over text.
+        const blend: 'normal' | 'difference' = pillActive ? 'normal' : 'difference';
+        s.background = pillActive
+          ? lerpColor(INK_REAL, ACCENT_REAL, ct)
+          : lerpColor(INK, ACCENT, ct);
+        if (blend !== lastBlend) {
+          s.mixBlendMode = blend;
+          lastBlend = blend;
+        }
 
         // email pill: z-index 5 so it sits above the sun (z-index 1-2) but below
         //             section content (z-index 10) — text stays on top of pill

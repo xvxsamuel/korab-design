@@ -111,7 +111,14 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
 .cursor {
   position: fixed; top: 0; left: 0;
   width: 8px; height: 8px; border-radius: 50%;
+  /* JS sets the background each frame. The painted source color is
+     `bg − target` (computed in Cursor.tsx via preBlend), and mix-blend-mode:
+     difference resolves it to the visual target over the page bg. So the
+     cursor element physically morphs from dot to pill while its rendered
+     color is always the right ink/accent, and ink text underneath stays
+     legible (blends to a contrasting wine-burgundy rather than vanishing). */
   background: var(--ink);
+  mix-blend-mode: difference;
   pointer-events: none;
   z-index: 1000;
   will-change: left, top, width, height, border-radius, background;
@@ -161,8 +168,6 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   line-height: 1.2;
   pointer-events: auto;
 }
-
-
 /* original label — slides down & fades out on hover */
 .nav-links a .nav-label-base {
   display: block;
@@ -268,38 +273,62 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   height: var(--sun-size);
   max-width: 520px;
   max-height: 520px;
-  border: 1px solid var(--rule);
-  border-radius: 50%;
   z-index: 1;
   opacity: 0;
   pointer-events: none;
   will-change: transform, opacity;
 }
+.sun-trace-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  display: block;
+}
+.sun-ring-outer,
+.sun-ring-inner {
+  fill: none;
+  stroke-linecap: round;
+  transform-origin: center;
+}
+/* Outer ring: traces in via stroke-dashoffset (same draw mechanic as orbits),
+   in place at the sun's resting position. */
+.sun-ring-outer {
+  stroke: var(--rule);
+  stroke-dasharray: 100;
+  stroke-dashoffset: -100;
+}
+/* Inner ring: rendered at r=72 in markup, but starts the entrance at r=99
+   (matching the outer ring's resting radius) and contracts to r=72.
+   useSunAnimation drives the shrink + fade via Web Animations API rather
+   than CSS @keyframes — CSS animation of the SVG `r` attribute does not
+   interpolate consistently across browsers (it tends to step-change instead
+   of tween), so JS-driven animation is more reliable. The static rule below
+   only handles the pre-animation invisible state. */
+.sun-ring-inner {
+  stroke: rgba(68, 91, 75, 0.25);
+  opacity: 0;
+}
 
-/* Mount fade-in for the sun, orbit rings, and orbit stars. Class is added
-   from useSunAnimation once the elements have been positioned so they fade
-   in in place rather than from (0,0). Approximates GSAP's power2.out. */
-@keyframes sun-mount-fade {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-.sun-fade-in {
-  animation: sun-mount-fade 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s both;
-}
-.sun-orbit.sun-fade-in {
-  animation-duration: 1.2s;
-  animation-delay: 0.4s;
-}
-.sun-orbit.sun-orbit-b.sun-fade-in,
+/* sun-fade-in: added by useSunAnimation after elements are positioned.
+   Two-class selectors carry specificity 0,2,0 so they beat the per-element
+   `opacity: 0` rules (.sun-orbit, .star-a, .star-b) defined later in source.
+   For stars the animation below owns opacity anyway, but this keeps the
+   cascade consistent. */
+.sun-trace.sun-fade-in,
+.sun-orbit.sun-fade-in,
+.star-a.sun-fade-in,
 .star-b.sun-fade-in {
-  animation-delay: 0.5s;
+  opacity: 1;
 }
-.sun-trace::before {
-  content: '';
-  position: absolute;
-  inset: 14%;
-  border: 1px solid rgba(68, 91, 75, 0.25);
-  border-radius: 50%;
+
+.sun-trace.sun-fade-in .sun-ring-outer {
+  animation: sun-outer-trace 1.4s cubic-bezier(0.4, 0, 0.6, 1) 0s forwards;
+}
+/* Inner ring's shrink + fade are driven by useSunAnimation via the Web
+   Animations API — see the inner-ring comment above for why CSS keyframes
+   weren't used. */
+@keyframes sun-outer-trace {
+  to { stroke-dashoffset: 0; }
 }
 
 /* Orbit ring SVG — fixed, follows the sun via JS transform ----------- */
@@ -318,12 +347,37 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
 .sun-orbit-ring {
   fill: none;
   stroke: rgba(68, 91, 75, 0.25);
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  /* Negative offset makes the dash slide IN from the END of the path
+     (path-pos 100 toward 0) instead of growing FROM the start (0 toward 100).
+     SVG circles draw clockwise from 3 o'clock, so going backward = counter-
+     clockwise visually; on the visible left arc that reads top → bottom. */
+  stroke-dashoffset: -100;
 }
 
 /* Second (smaller) orbit ring */
-.sun-orbit-ring-b { stroke: rgba(68, 91, 75, 0.15); }
+.sun-orbit-ring-b { stroke: rgba(68, 91, 75, 0.25); }
 
-/* Both orbit stars — position: fixed, pure viewport space, JS drives position + size */
+/* Single-pass linear draw over the full ring. The previous two-stage
+   approach (visible-portion 2s + off-screen-rest 0.4s) snapped on ring B
+   because the visibility-fraction estimate didn't always match reality —
+   when it was off, the "rest" stage kicked in while a slice of the ring
+   was still on-screen and drew it almost instantly. Drawing the whole
+   ring uniformly removes that dependency entirely; the visible arc just
+   gets the proportional slice of the duration matching its share of the
+   ring (~70% of the ring visible → ~70% of the duration spent drawing
+   on-screen pixels), which feels steady on both rings. */
+.sun-orbit.sun-fade-in .sun-orbit-ring {
+  animation: ring-draw 2.5s linear forwards;
+}
+@keyframes ring-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Both orbit stars — position: fixed, pure viewport space, JS drives position + size.
+   Outer .star-a/.star-b owns position (transform set by JS); the spin lives
+   on the innermost SVG. */
 .star-a, .star-b {
   position: fixed;
   left: 0; top: 0;
@@ -331,11 +385,42 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   z-index: 2;
   opacity: 0;
   color: var(--accent);
-  will-change: transform, opacity;
+  will-change: transform, opacity, filter;
 }
-.star-b .brand-orbit-body { animation-duration: 50s; }
 
-/* Spinning icon shared by nav brand and orbit stars ------------------ */
+/* Same blur+threshold "ink burning" entrance as the hero title, but flooded
+   with accent via #starThreshold so the stars bloom in matching the
+   surrounding palette. Star A starts in lockstep with the title; Star B
+   has a small stagger so they don't surface in unison.
+   The blur is driven through a typed custom property so CSS can interpolate
+   it smoothly — animating the `filter` value directly snaps discretely
+   because the value contains a url() reference (CSS doesn't interpolate
+   filter lists that include url()), which is why the stars previously
+   popped in instead of blooming. animation-fill-mode `both` applies the
+   heavy initial blur during Star B's delay so the 90% threshold cuts it to
+   invisibility while it waits, and keeps the final blur(0) state after the
+   animation so the star doesn't snap back to its initial blur. */
+@property --star-blur {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 13px;
+}
+.star-a.sun-fade-in,
+.star-b.sun-fade-in {
+  opacity: 1;
+  filter: blur(var(--star-blur)) url(#starThreshold);
+  animation: star-ink-bloom 1.8s cubic-bezier(0.32, 0, 0.67, 0) both;
+}
+.star-b.sun-fade-in {
+  animation-delay: 0.15s;
+}
+@keyframes star-ink-bloom {
+  from { --star-blur: 13px; }
+  to   { --star-blur: 0px; }
+}
+
+/* Spinning icon — spin lives on the innermost SVG so the wrapper above can
+   own the entrance scale animation without fighting for `transform`. */
 
 .brand-orbit-body {
   position: relative;
@@ -343,9 +428,52 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   width: 100%;
   height: 100%;
   z-index: 1;
+}
+.star-a .sun-inline,
+.star-b .sun-inline {
   animation: brand-spin 90s linear infinite;
 }
+.star-b .sun-inline { animation-duration: 50s; }
 @keyframes brand-spin { to { transform: rotate(360deg); } }
+
+/* Skip on-mount entry animations when the page loads partway scrolled. The
+   `no-entry-anim` class is set on <html> from main.tsx before React mounts.
+   Each new entry animation should add its own override here so it follows
+   the same pattern (snap to final state instead of playing). */
+html.no-entry-anim .sun-orbit-ring {
+  stroke-dashoffset: 0 !important;
+  animation: none !important;
+}
+html.no-entry-anim .sun-ring-outer {
+  stroke-dashoffset: 0 !important;
+  animation: none !important;
+}
+html.no-entry-anim .sun-ring-inner {
+  r: 72 !important;
+  opacity: 1 !important;
+  animation: none !important;
+}
+html.no-entry-anim .sun-trace,
+html.no-entry-anim .sun-orbit,
+html.no-entry-anim .star-a,
+html.no-entry-anim .star-b {
+  opacity: 1 !important;
+  animation: none !important;
+}
+html.no-entry-anim .star-a,
+html.no-entry-anim .star-b {
+  filter: none !important;
+}
+html.no-entry-anim .hero-name .row {
+  filter: none !important;
+}
+.ink-noise-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
 
 /* Hero layout placeholder — invisible, preserves the gap in the title */
 
@@ -354,7 +482,7 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   width: 0.78em;
   height: 0.78em;
   flex-shrink: 0;
-  margin-right: 0.08em;
+  margin-right: 0;
   vertical-align: -0.06em;
   visibility: hidden;
 }
@@ -417,13 +545,15 @@ section {
   display: flex;
   align-items: flex-end;
   padding-top: 120px;
-  padding-bottom: 18vh;
+  padding-bottom: 18.75vh; /* 3 units on the 16-unit viewport grid the sun/star layout uses */
 }
 .hero-name {
   font-family: var(--display);
   font-weight: 500;
   font-size: clamp(80px, 12vw, 200px);
-  line-height: 0.88;
+  line-height: 0.6;
+  /* No-op on flex children, but kept for non-split-letter fallback. Spacing
+     between letters is actually driven by the row's gap + .hero-letter margin. */
   letter-spacing: -0.015em;
   margin: 0;
   color: var(--ink);
@@ -435,9 +565,62 @@ section {
 .hero-name .row {
   display: flex;
   align-items: center;
-  gap: 0.08em;
+  /* Spacing between letters is controlled by gap (letter-spacing is a no-op
+     on flex items). Negative margin on .hero-letter then compresses further. */
+  gap: 0;
 }
-.hero-name .row.row2 { padding-left: 1.6em; }
+/* Entrance: blur the row and feed it through #textThreshold so the blurred
+   pixels snap to a crisp gooey shape. Hero.tsx animates --text-blur from 5px
+   to 0 and the threshold's tableValues from 90% → 5% over 3s on an ease-out
+   curve, then drops .is-entering so the filter chain comes off and the final
+   text renders with native antialiased edges (no jagged threshold residue). */
+.hero-name .row.is-entering {
+  /* Fallback matches START_BLUR in Hero.tsx so the first paint already
+     shows the title at the bloom's starting blur, in sync with the stars
+     (whose CSS keyframe also starts at 13px). Otherwise the title would
+     flash at 5px for a frame before Hero's rAF kicks in, making the stars
+     read as delayed by comparison. */
+  filter: blur(var(--text-blur, 13px)) url(#textThreshold);
+}
+/* Bloom overlay: a duplicate of the title rows, stacked on top of the
+   native ones via position: absolute. Only the bloom rows carry the
+   filter, and only this layer fades during the entrance — so the native
+   text underneath is what the user sees once the cross-fade finishes,
+   and dropping the filter (by unmounting the overlay) has no visible
+   effect. The flex column mirrors .hero-name's so each overlay row sits
+   exactly on top of its native counterpart. */
+.hero-name-bloom-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  z-index: 1;
+}
+.hero-name .row.row2 {
+  padding-left: 1.95em;
+  /* Vertical nudge for the K-o-r-a-b letters only. Applied as translateY on
+     the .hero-letter children below, so the inline star placeholder (and
+     therefore the live star tracking it) stays put while you dial in K's
+     vertical alignment with the star. Increase to push Korab down further. */
+  --korab-y: 0.06em;
+}
+.hero-name .row.row2 .hero-letter {
+  transform: translateY(var(--korab-y, 0));
+}
+
+.hero-letter {
+  display: inline-block;
+  /* Padding gives the row-level blur some buffer past glyph overshoot.
+     Negative margin compresses the visual layout, so the padding doesn't
+     widen letter gaps. NOTE: the residual (2*pad − 2*|margin| = 0.04em)
+     also shows up as a gap in selection highlights between letters whose
+     --ml is 0. Tighter margins close the gap but compress the row, so
+     this stays at the original kerning. */
+  padding: 0.12em 0.09em;
+  margin: 0 -0.07em;
+  margin-left: calc(-0.07em + var(--ml, 0em));
+}
 
 /* Sections ----------------------------------------------------------- */
 
@@ -700,6 +883,242 @@ footer.is-grown .bg-flower-star {
   100% { top: 0%;   transform: translate(-50%, -100%) scale(1);    opacity: 1; }
 }
 
+/* Click hit-target for the flower easter egg. The bg-flower span itself has
+   zero width (children are positioned around its center), so we overlay a
+   roomy transparent box that covers the visible extent — leaves on both
+   sides, plus the star above the stem — and re-enable pointer events on it
+   even though the parent flower container is pointer-events: none.
+
+   Sized to comfortably enclose the worst-case visual: leaves can reach ~46px
+   from the stem center after rotation, and the star can be up to ~80px wide
+   (so ~40px out from center). The 70px horizontal buffer leaves a few px of
+   slack on either side so clicks just outside a leaf or star edge still
+   register. The top buffer pads above the bloom; the bottom buffer pads
+   below the soil line. */
+.bg-flower-hit {
+  position: absolute;
+  bottom: -6px;
+  left: -70px;
+  right: -70px;
+  top: calc(-1 * var(--star-size, 60px) - 10px);
+  pointer-events: auto;
+  z-index: 3;
+}
+.bg-flower.is-cutting .bg-flower-hit {
+  pointer-events: none;
+}
+
+/* Easter egg: clicking a flower drives a knife-style cut. The blade enters
+   from a random side and sweeps across the flower at a slight random tilt
+   that passes through the click point; the lower stem stays put while the
+   upper portion is rendered into a duplicate (.bg-flower-cut-top) that drops
+   away with rotation and fades out. After the top has fallen, the surviving
+   lower stem fades, then the parent React component swaps in a freshly
+   randomised flower in the same slot.
+
+   The X bounds use wide pixel values so leaves rendered outside the
+   zero-width bg-flower span are still inside the polygon; --cut-left and
+   --cut-right are pixel Y values for the cut line at the polygon's left and
+   right edges (computed in JS so the line crosses the click point exactly).
+
+   .bg-flower-main wraps the standing flower (lower portion after the cut);
+   the sweep clip-path animation runs on it so the cut visibly progresses,
+   and the delayed fade on the same wrapper finishes the surviving stem. */
+.bg-flower-main {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.bg-flower.is-cutting--from-left .bg-flower-main {
+  animation:
+    flower-cut-sweep-from-left 160ms cubic-bezier(0.4, 0, 0.6, 1) forwards,
+    flower-cut-fade 300ms 660ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+.bg-flower.is-cutting--from-right .bg-flower-main {
+  animation:
+    flower-cut-sweep-from-right 160ms cubic-bezier(0.4, 0, 0.6, 1) forwards,
+    flower-cut-fade 300ms 660ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+
+/* Cut-away duplicate: same flower geometry, clipped to ABOVE the cut line.
+   The reveal animation tracks the main body's sweep with an inverse polygon
+   (collapsed at the entry edge → full above-cut quad), so as the main body
+   hides its upper portion left-to-right, this duplicate reveals the same
+   pixels in the same place. The handoff is visually invisible — the upper
+   half just stays put through the sweep. After a short pause it lifts off
+   and drops; gravity-style ease-in carries it past the footer's bottom edge,
+   where the footer-flowers clip-path crops it out so it disappears
+   "off-screen" rather than fading. Pointer events stay off so the duplicate
+   never intercepts clicks. */
+.bg-flower-cut-top {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 1;
+}
+.bg-flower.is-cutting--from-left .bg-flower-cut-top {
+  animation:
+    flower-cut-reveal-from-left 160ms cubic-bezier(0.4, 0, 0.6, 1) both,
+    flower-cut-top-fall 760ms 220ms cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
+}
+.bg-flower.is-cutting--from-right .bg-flower-cut-top {
+  animation:
+    flower-cut-reveal-from-right 160ms cubic-bezier(0.4, 0, 0.6, 1) both,
+    flower-cut-top-fall 760ms 220ms cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
+}
+
+/* The cut-top duplicate mounts mid-cut, so its stem/leaves/star would
+   otherwise re-trigger the grow animations from scratch (matching
+   `footer.is-grown ...` and `.work-panel.is-open ...`) and the falling top
+   would visibly shrink/rotate-in instead of dropping fully formed. Force its
+   inner parts into their fully-grown state. !important is needed only to
+   beat the higher-specificity grow rules; the explicit transforms apply
+   afterward because no animation overrides them. */
+.bg-flower-cut-top .bg-flower-stem {
+  animation: none !important;
+  transform: translateX(-50%) scaleY(1);
+}
+.bg-flower-cut-top .bg-flower-leaf {
+  animation: none !important;
+  opacity: 1;
+}
+.bg-flower-cut-top .bg-flower-leaf--right {
+  transform: rotate(-30deg) scale(1);
+}
+.bg-flower-cut-top .bg-flower-leaf--left {
+  transform: rotate(30deg) scale(1);
+}
+.bg-flower-cut-top .bg-flower-star {
+  animation: none !important;
+  top: 0%;
+  transform: translate(-50%, -100%) scale(1);
+  opacity: 1;
+}
+
+/* The 6-vertex polygon visibly progresses across the flower instead of
+   snapping into place. The "tip" (vertices 5 and 6) starts collapsed at one
+   edge and travels to the opposite edge along the cut line and the top of
+   the box, leaving an angled boundary as it goes. */
+@keyframes flower-cut-sweep-from-left {
+  from {
+    clip-path: polygon(
+      200px -9999px,
+      200px 9999px,
+      -200px 9999px,
+      -200px var(--cut-left, 0px),
+      -200px var(--cut-left, 0px),
+      -200px -9999px
+    );
+  }
+  to {
+    clip-path: polygon(
+      200px -9999px,
+      200px 9999px,
+      -200px 9999px,
+      -200px var(--cut-left, 0px),
+      200px var(--cut-right, 0px),
+      200px -9999px
+    );
+  }
+}
+
+@keyframes flower-cut-sweep-from-right {
+  from {
+    clip-path: polygon(
+      -200px -9999px,
+      -200px 9999px,
+      200px 9999px,
+      200px var(--cut-right, 0px),
+      200px var(--cut-right, 0px),
+      200px -9999px
+    );
+  }
+  to {
+    clip-path: polygon(
+      -200px -9999px,
+      -200px 9999px,
+      200px 9999px,
+      200px var(--cut-right, 0px),
+      -200px var(--cut-left, 0px),
+      -200px -9999px
+    );
+  }
+}
+
+@keyframes flower-cut-fade {
+  from {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--cut-fade-dx, 0), 5px);
+  }
+}
+
+/* Reveal keyframes mirror flower-cut-sweep-* so cut-top fills in exactly
+   what the main body is hiding. Uses 4-vertex polygons (degenerate at the
+   entry edge) — vertices match between from/to so the clip-path interpolates
+   smoothly from "collapsed line" to "above-cut quad". */
+@keyframes flower-cut-reveal-from-left {
+  from {
+    clip-path: polygon(
+      -200px -9999px,
+      -200px -9999px,
+      -200px var(--cut-left, 0px),
+      -200px var(--cut-left, 0px)
+    );
+  }
+  to {
+    clip-path: polygon(
+      -200px -9999px,
+      200px -9999px,
+      200px var(--cut-right, 0px),
+      -200px var(--cut-left, 0px)
+    );
+  }
+}
+
+@keyframes flower-cut-reveal-from-right {
+  from {
+    clip-path: polygon(
+      200px -9999px,
+      200px -9999px,
+      200px var(--cut-right, 0px),
+      200px var(--cut-right, 0px)
+    );
+  }
+  to {
+    clip-path: polygon(
+      -200px -9999px,
+      200px -9999px,
+      200px var(--cut-right, 0px),
+      -200px var(--cut-left, 0px)
+    );
+  }
+}
+
+/* Pure translate + rotate fall — no opacity change. The piece rides the
+   curve down past the footer's bottom edge (where it gets cropped by the
+   .footer-flowers clip-path) and is then unmounted by React, so there's no
+   visible stop or fade. */
+@keyframes flower-cut-top-fall {
+  from {
+    transform: translate(0, 0) rotate(0);
+  }
+  to {
+    transform: translate(var(--top-fall-dx, 0), var(--top-fall-dy, 220px)) rotate(var(--top-fall-rotate, 12deg));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-flower.is-cutting--from-left .bg-flower-main,
+  .bg-flower.is-cutting--from-right .bg-flower-main,
+  .bg-flower.is-cutting .bg-flower-cut-top {
+    animation: none;
+  }
+}
+
 /* Side drawer — fixed-position panel slides in from the right. The works list
    stays in place; page height is unchanged on open/close. */
 .work-panel-backdrop {
@@ -823,7 +1242,9 @@ footer.is-grown .bg-flower-star {
   position: relative;
   display: block;
 }
-/* ::before is a CSS-only fallback for touch / no-cursor devices */
+/* ::before is a CSS-only fallback for touch / no-cursor devices. On desktop,
+   the live cursor element morphs into the pill rect on hover so this stays
+   invisible there. */
 .work-panel-close::before {
   content: '';
   position: absolute;
@@ -1135,7 +1556,8 @@ footer.is-grown .bg-flower-star {
   border-radius: 999px;
   transition: color 0.35s var(--ease-soft);
 }
-/* ::before is a CSS-only fallback for touch / no-cursor devices */
+/* ::before is a CSS-only fallback for touch / no-cursor devices. On desktop,
+   the live cursor element morphs into the pill rect on hover. */
 .contact-email::before {
   content: '';
   position: absolute;
@@ -1154,6 +1576,17 @@ footer.is-grown .bg-flower-star {
     transform: scale(1);
     opacity: 1;
   }
+}
+/* Invisible hit-area halo. Extends the pointer detection zone a few px past
+   the pill's visible edge so :hover and the cursor's pill-origin handler
+   trigger from a small surrounding band — the pill reads as snapping out to
+   meet the cursor instead of requiring the pointer to literally cross in.
+   Pointer events on a pseudo-element bubble to the parent, so the existing
+   .contact-email handlers fire as if the pointer entered the pill itself. */
+.contact-email::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
 }
 
 .contact-email-text {
@@ -1310,6 +1743,14 @@ footer {
   height: 100%;
   pointer-events: none;
   z-index: 1;
+  /* Clip ONLY at the bottom edge so the cut easter-egg's falling top half
+     gets cropped out as it crosses the footer's bottom (which sits at the
+     page's bottom). Top/left/right are pulled way out so tall stems and the
+     stars they carry can still poke up into the contact section above the
+     footer — that's intentional, see the `footer { overflow: visible }` rule
+     and its comment. The order in inset() is top right bottom left;
+     negative values extend outward (no clipping there). */
+  clip-path: inset(-9999px -9999px 0 -9999px);
 }
 
 /* Responsive --------------------------------------------------------- */
@@ -1321,7 +1762,7 @@ footer {
   .brand-orbit { width: 32px; height: 32px; }
   .sun-trace { max-width: 320px; max-height: 320px; }
   .hero-name { font-size: clamp(72px, 16vw, 140px); }
-  .hero-name .row.row2 { padding-left: 1em; }
+  .hero-name .row.row2 { padding-left: 1.25em; }
   .hero-meta { font-size: 12px; }
   .section-title {
     font-size: clamp(56px, 12vw, 90px);
@@ -1362,7 +1803,7 @@ footer {
 
 @media (max-width: 480px) {
   .hero-name { font-size: clamp(60px, 18vw, 120px); }
-  .hero-name .row.row2 { padding-left: 0.5em; }
+  .hero-name .row.row2 { padding-left: 0.7em; }
 }
 
 /* Short viewports: the sun's circular orbit can push stars off-screen or
@@ -1397,6 +1838,30 @@ footer {
     animation: none !important;
   }
   .sun-trace { opacity: 1 !important; }
+  .sun-ring-outer {
+    stroke-dasharray: none !important;
+    stroke-dashoffset: 0 !important;
+    animation: none !important;
+  }
+  .sun-ring-inner {
+    r: 72 !important;
+    opacity: 1 !important;
+    animation: none !important;
+  }
+  .sun-orbit-ring {
+    stroke-dasharray: none !important;
+    stroke-dashoffset: 0 !important;
+    animation: none !important;
+  }
+  .star-a, .star-b {
+    scale: 1 !important;
+    opacity: 1 !important;
+    animation: none !important;
+    filter: none !important;
+  }
+  .hero-name .row {
+    filter: none !important;
+  }
   .contact-email,
   .contact-email::before,
   .contact-email-char,

@@ -13,7 +13,6 @@ export default function Nav({ active }: NavProps) {
     const scroll = () =>
       document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     // If the works panel is open, close it first so the sideways slide-out
-    // plays before we scroll to the target section.
     const panelOpen = document.querySelector('.work-panel.is-open');
     if (panelOpen) {
       window.dispatchEvent(new CustomEvent('works:close'));
