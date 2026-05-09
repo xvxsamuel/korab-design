@@ -10,7 +10,7 @@ import { useLayoutEffect } from 'react';
 // laid out against an invisible 16-unit lattice rather than ad-hoc decimals.
 const SUN_START   = { x: 93.75, y: 68.75 };  // grid (15, 11)
 const SUN_CONTROL = { x: 50,    y: -18.75 }; // grid (8, -3)
-const SUN_END     = { x: 6.25,  y: 31.25 };  // grid (1, 5)
+const SUN_END     = { x: 6.25,  y: 18.75 };  // grid (1, 3)
 
 // Kept for the end-position lookup elsewhere in this file.
 const SUN_PATH = [SUN_START, SUN_END] as const;
@@ -383,13 +383,13 @@ export function useSunAnimation() {
       // pair vertically toward each other a touch from the row-3/row-6
       // anchors, while X stays on the integer 16-unit grid.
       const dirA = Math.atan2(vh * 0.21875 - sunEndVY, vw * 0.5625 - sunEndVX); // grid (9, 3.5)
-      const dirB = Math.atan2(vh * 0.34375 - sunEndVY, vw * 0.3125 - sunEndVX); // grid (5, 5.5)
+      const dirB = Math.atan2(vh * 0.1525 - sunEndVY, vw * 0.3125 - sunEndVX); // grid (5, 1)
 
       // Each star takes the natural shortest angular path from start to end,
       // which reverses the previously-forced "long way around" orbit. Same
       // landing positions, opposite rotation direction.
       endAngleA = (dirA - (1 - STAR_ARC_SCALE)   * startAngleA) / STAR_ARC_SCALE;
-      endAngleB = (dirB - (1 - STAR_B_ARC_SCALE) * startAngleB) / STAR_B_ARC_SCALE;
+      endAngleB = (dirB - (1 - STAR_B_ARC_SCALE) * startAngleB) / STAR_B_ARC_SCALE + (2 * Math.PI) / STAR_B_ARC_SCALE;
 
       const p = computeProgress();
       displayedProgress = p;

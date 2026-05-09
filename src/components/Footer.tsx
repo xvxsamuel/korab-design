@@ -33,7 +33,10 @@ function computeSlots(footer: HTMLElement): number[] {
 
   const controls = [
     footer.querySelector<HTMLElement>('.footer-top'),
-    footer.querySelector<HTMLElement>('.footer-copy'),
+    // Meta column wraps the clock, tip, and copyright — measuring its rect
+    // (rather than just the copyright span) so flower slots leave room for
+    // the entire stack on the right.
+    footer.querySelector<HTMLElement>('.footer-meta'),
   ];
   for (const el of controls) {
     if (!el) continue;
@@ -64,10 +67,28 @@ function computeSlots(footer: HTMLElement): number[] {
   return slots;
 }
 
+// Local-time clock in the Europe/Amsterdam zone (covers The Hague). Returns
+// HH:MM in 24-hour format. Re-evaluated each second so the visible string
+// stays current; React skips re-render when the formatted value is unchanged.
+function formatAmsterdamTime(): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Amsterdam',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date());
+}
+
 export default function Footer() {
   const ref = useRef<HTMLElement>(null);
   const [grown, setGrown] = useState(false);
   const [flowers, setFlowers] = useState<Flower[]>([]);
+  const [time, setTime] = useState<string>(() => formatAmsterdamTime());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTime(formatAmsterdamTime()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useLayoutEffect(() => {
     const update = () => {
@@ -120,23 +141,41 @@ export default function Footer() {
     <footer ref={ref} className={grown ? 'is-grown' : undefined}>
       <BackgroundFlowers flowers={flowers} className="footer-flowers" />
       <button type="button" className="footer-top" onClick={backToTop} aria-label="Back to top">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="m18 15-6-6-6 6" />
-        </svg>
-        <span>back to top</span>
+        <span className="footer-top-base" aria-hidden="true">
+          {Array.from('back to top').map((ch, i) => (
+            <span
+              key={i}
+              className="footer-top-char"
+              style={{ '--i': i } as React.CSSProperties}
+            >
+              {ch === ' ' ? ' ' : ch}
+            </span>
+          ))}
+        </span>
+        <span className="footer-top-alt" aria-hidden="true">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m18 15-6-6-6 6" />
+          </svg>
+        </span>
+        <span className="sr-only">back to top</span>
       </button>
-      <span className="footer-copy">© {new Date().getFullYear()} korab.design</span>
+      <div className="footer-meta">
+        <span className="footer-clock" aria-label="Local time in The Hague">
+          <time>{time}</time>
+          <span className="footer-clock-loc">the hague, nl</span>
+        </span>
+        <span className="footer-copy">© {new Date().getFullYear()} korab.design</span>
+      </div>
     </footer>
   );
 }

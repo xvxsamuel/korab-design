@@ -1465,7 +1465,7 @@ footer.is-grown .bg-flower-star {
   font-family: var(--body);
   font-size: 16px;
   line-height: 1.65;
-  color: var(--ink-soft);
+  color: var(--ink);
   margin: 0 0 16px;
   max-width: 48ch;
 }
@@ -1539,7 +1539,7 @@ footer.is-grown .bg-flower-star {
   font-size: clamp(18px, 1.6vw, 22px);
   letter-spacing: 0;
   line-height: 1.4;
-  color: var(--ink-soft);
+  color: var(--ink);
   margin: 0;
 }
 .contact-email {
@@ -1674,7 +1674,7 @@ footer.is-grown .bg-flower-star {
   font-family: var(--body);
   font-size: 15px;
   line-height: 1.65;
-  color: var(--ink-soft);
+  color: var(--ink);
   margin: 0;
 }
 
@@ -1688,7 +1688,7 @@ footer {
   padding: calc(14vh + 16px) var(--gutter) 28px;
   font-family: var(--body);
   font-size: 11px;
-  color: var(--ink-soft);
+  color: var(--ink);
   letter-spacing: 0.14em;
   text-transform: lowercase;
   display: flex;
@@ -1700,40 +1700,113 @@ footer {
   overflow: visible;
 }
 
+/* Right-side stack: clock + location, tip, and copyright. Meta is the
+   right-side flex item of the footer; computeSlots() reads its bounding
+   rect when distributing flowers so the whole stack is reserved. */
+.footer-meta {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.footer-clock {
+  display: inline-flex;
+  gap: 0.6em;
+  align-items: baseline;
+}
+.footer-clock time {
+  /* Tabular figures so the digits don't shift width as the minute ticks. */
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
 .footer-copy {
   display: block;
   position: relative;
   z-index: 2;
+  /* Promoted from --ink-soft to full ink so the brand reads as the anchor
+     of the footer stack. */
+  color: var(--ink);
 }
 
+@media (max-width: 900px) {
+  /* Footer stacks left-aligned on small screens; meta follows. */
+  .footer-meta { align-items: flex-start; }
+}
+
+/* Mirrors the nav-contact button: pill with ink border that fills on hover,
+   character-by-character diagonal fly-out of the base label, and an
+   alternate label (the up-chevron SVG here) that slides in from above. */
 .footer-top {
   position: relative;
   z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px 8px 12px;
+  display: inline-block;
+  padding: 10px 18px;
+  overflow: hidden;
   background: none;
-  border: 1px solid var(--ink-faint);
+  border: 1px solid var(--ink);
   border-radius: 999px;
-  color: var(--ink-soft);
+  color: var(--ink);
+  line-height: 1.2;
   font: inherit;
+  font-size: 14px;
   letter-spacing: inherit;
   text-transform: inherit;
   cursor: none;
-  transition: color 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+  transition: background 0.25s ease, border-color 0.25s ease;
 }
 .footer-top:hover {
-  color: var(--ink);
+  background: var(--ink);
   border-color: var(--ink);
 }
-.footer-top svg {
-  display: block;
-  transition: transform 0.32s var(--ease-soft);
+
+.footer-top-base {
+  display: flex;
+  position: relative;
+  z-index: 1;
+  gap: 0;
 }
-.footer-top:hover svg {
-  transform: translateY(-2px);
+.footer-top-char {
+  display: inline-block;
+  white-space: pre;
+  transition:
+    transform 0.22s var(--ease-soft),
+    opacity   0.18s ease;
+  /* Stagger: chars leave one-by-one going in, snap together going out.
+     Hover state below zeroes out the delay so they all fly together. */
+  transition-delay: calc(var(--i) * 28ms);
 }
+.footer-top:hover .footer-top-char {
+  transform: translateY(-60%) rotate(-12deg);
+  opacity: 0;
+  color: var(--bg);
+  transition-delay: 0s;
+}
+
+.footer-top-alt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  color: var(--ink);
+  transform: translateY(-110%);
+  opacity: 0;
+  transition:
+    transform 0.32s var(--ease-soft),
+    opacity   0.28s ease,
+    color     0.25s ease;
+  transition-delay: 0.04s;
+}
+.footer-top:hover .footer-top-alt {
+  transform: translateY(0);
+  opacity: 1;
+  color: var(--bg);
+  transition-delay: 0.08s;
+}
+.footer-top-alt svg { display: block; }
 
 .footer-flowers {
   position: absolute;
