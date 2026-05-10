@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 const DOT_SIZE = 8;
-const LERP_DOT  = 0.28;
-const LERP_PILL = 0.12;
+const LERP_DOT  = 0.6;
+const LERP_PILL = 0.22;
 
 function lerpColor(a: [number,number,number], b: [number,number,number], t: number): string {
   const r = Math.round(a[0] + (b[0] - a[0]) * t);
