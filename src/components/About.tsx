@@ -15,7 +15,15 @@ export default function About() {
       <h2 className="section-title">About</h2>
       <div className="about-body">
         <div className="about-img-wrap">
-          <img src={pfp} alt="Korab" className="about-img" />
+          <img
+            src={pfp}
+            alt="Korab"
+            className="about-img"
+            width="800"
+            height="1200"
+            loading="lazy"
+            decoding="async"
+          />
         </div>
         <div className="about-left">
           <p className="about-lead">

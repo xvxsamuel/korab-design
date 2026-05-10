@@ -66,6 +66,12 @@ export default function Cursor() {
       !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!canHover) return;
     setEnabled(true);
+    // The `cursor: none` rules in style.css are gated on this class, so the
+    // system cursor only disappears once the custom cursor is actually
+    // mounting. If this effect bails (reduced motion, coarse pointer) or JS
+    // never runs, the class never lands and the user keeps their native
+    // cursor instead of a blank page where the pointer should be.
+    document.documentElement.classList.add('cursor-custom');
 
     let mx = -200, my = -200;
     // Pill target rect — mutated in place each frame to avoid per-frame allocations.
@@ -90,6 +96,23 @@ export default function Cursor() {
     let raf = 0;
     let running = false;
     let lastBlend: '' | 'normal' | 'difference' = '';
+    // Cache the prior DOM-write strings so a frame that produces the same
+    // visual values as the previous one can skip the style write entirely.
+    // The render loop already stops on settle, but during active morphing
+    // some properties go quiet several frames before others (e.g. width is
+    // done before color), and these short-circuits keep those late frames
+    // from doing work the browser would just discard.
+    let lastTransform = '';
+    let lastWidth = '';
+    let lastHeight = '';
+    let lastRadius = '';
+    let lastBg = '';
+    // Cached inputs to lerpColor so repeated identical (a, b, t) calls
+    // don't re-round and re-concat the same rgb() string each frame.
+    let lerpA: [number, number, number] | null = null;
+    let lerpB: [number, number, number] | null = null;
+    let lerpT = -1;
+    let lerpResult = '';
 
     // Two palettes are tracked per scope so the cursor can switch blend modes
     // without recomputing colours each frame:
@@ -157,11 +180,20 @@ export default function Cursor() {
       const el = ref.current;
       if (el) {
         const s = el.style;
-        s.left   = `${cx}px`;
-        s.top    = `${cy}px`;
-        s.width  = `${cw}px`;
-        s.height = `${ch}px`;
-        s.borderRadius = `${cr}px`;
+        // translate3d (not left/top) so each frame is composited only — no
+        // layout pass. Width/height/border-radius still drive the dot↔pill
+        // morph, but those touch the cursor's own box, not the page layout.
+        // Each property is gated on a prior-value cache so frames that don't
+        // change a property skip its style write — assigning the same string
+        // back still costs a render-tree invalidation lookup.
+        const tNext = `translate3d(${cx}px, ${cy}px, 0)`;
+        if (tNext !== lastTransform) { s.transform = tNext; lastTransform = tNext; }
+        const wNext = `${cw}px`;
+        if (wNext !== lastWidth) { s.width = wNext; lastWidth = wNext; }
+        const hNext = `${ch}px`;
+        if (hNext !== lastHeight) { s.height = hNext; lastHeight = hNext; }
+        const rNext = `${cr}px`;
+        if (rNext !== lastRadius) { s.borderRadius = rNext; lastRadius = rNext; }
 
         // Pill mode paints the real palette under mix-blend-mode: normal so
         // the bubble is fully opaque and visually covers anything beneath it
@@ -170,9 +202,20 @@ export default function Cursor() {
         // keeps the pre-blended palette + difference so the small dot stays
         // legible over text.
         const blend: 'normal' | 'difference' = pillActive ? 'normal' : 'difference';
-        s.background = pillActive
-          ? lerpColor(INK_REAL, ACCENT_REAL, ct)
-          : lerpColor(INK, ACCENT, ct);
+        const a = pillActive ? INK_REAL : INK;
+        const b = pillActive ? ACCENT_REAL : ACCENT;
+        // lerpColor cache — when (a, b, t) repeat across frames the rounded
+        // RGB tuple is identical, so reuse the prior string. Hits during the
+        // tail of a morph where ct has stabilized but the loop is still
+        // running for position settling.
+        let bgNext: string;
+        if (a === lerpA && b === lerpB && ct === lerpT) {
+          bgNext = lerpResult;
+        } else {
+          bgNext = lerpColor(a, b, ct);
+          lerpA = a; lerpB = b; lerpT = ct; lerpResult = bgNext;
+        }
+        if (bgNext !== lastBg) { s.background = bgNext; lastBg = bgNext; }
         if (blend !== lastBlend) {
           s.mixBlendMode = blend;
           lastBlend = blend;
@@ -290,6 +333,7 @@ export default function Cursor() {
       window.removeEventListener('scroll', recompute);
       window.removeEventListener('resize', recompute);
       window.removeEventListener('palette-change', onPalette);
+      document.documentElement.classList.remove('cursor-custom');
     };
   }, []);
 

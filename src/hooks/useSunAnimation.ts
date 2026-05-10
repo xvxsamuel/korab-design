@@ -103,13 +103,20 @@ function sampleSun(p: number): { x: number; y: number } {
 }
 
 // Place a fixed star at viewport coords (vx, vy), centered.
-function placeStar(el: HTMLElement, vx: number, vy: number) {
-  el.style.transform = `translate(${vx}px, ${vy}px) translate(-50%, -50%)`;
+// translate3d (vs translate) is an explicit hint to keep the element on its
+// own GPU layer — `will-change: transform` already opts into this in CSS,
+// but the 3d form is more reliable across engines and the cost is identical.
+// The cache avoids re-writing identical transform strings when scroll is
+// settling and a frame produces the same float values as the prior one.
+function placeStar(el: HTMLElement, vx: number, vy: number, cache: { last: string }) {
+  const next = `translate3d(${vx}px, ${vy}px, 0) translate(-50%, -50%)`;
+  if (next !== cache.last) { el.style.transform = next; cache.last = next; }
 }
 
 // Center an orbit ring SVG at viewport coords (vx, vy) with pixel radius r.
-function placeRing(el: SVGElement, vx: number, vy: number, r: number) {
-  el.style.transform = `translate(${vx}px, ${vy}px) translate(-50%, -50%) scale(${r / SHELL_BASE})`;
+function placeRing(el: SVGElement, vx: number, vy: number, r: number, cache: { last: string }) {
+  const next = `translate3d(${vx}px, ${vy}px, 0) translate(-50%, -50%) scale(${r / SHELL_BASE})`;
+  if (next !== cache.last) { el.style.transform = next; cache.last = next; }
 }
 
 export function useSunAnimation() {
@@ -156,25 +163,38 @@ export function useSunAnimation() {
     let endAngleA   = 0;
     let endAngleB   = 0;
 
+    // Per-element transform caches — apply() runs every scroll-settle frame
+    // and writes 5 transforms; gating each on its prior value skips style
+    // writes when scroll has paused but the lerp tail is still ticking.
+    const sunCache    = { last: '' };
+    const orbitACache = { last: '' };
+    const orbitBCache = { last: '' };
+    const starACache  = { last: '' };
+    const starBCache  = { last: '' };
+
     const apply = (p: number) => {
       const { x, y } = sampleSun(p);
       const sunVX = (x / 100) * vw;
       const sunVY = (y / 100) * vh;
 
-      sunEl.style.transform = `translate(${sunVX}px, ${sunVY}px) translate(-50%, -50%)`;
-      placeRing(orbitEl,  sunVX, sunVY, ringRadius);
-      placeRing(orbitElB, sunVX, sunVY, ringRadiusB);
+      const sunNext = `translate3d(${sunVX}px, ${sunVY}px, 0) translate(-50%, -50%)`;
+      if (sunNext !== sunCache.last) {
+        sunEl.style.transform = sunNext;
+        sunCache.last = sunNext;
+      }
+      placeRing(orbitEl,  sunVX, sunVY, ringRadius,  orbitACache);
+      placeRing(orbitElB, sunVX, sunVY, ringRadiusB, orbitBCache);
 
       const fracA = Math.min(p * STAR_ARC_SCALE,   1);
       const fracB = Math.min(p * STAR_B_ARC_SCALE, 1);
 
       // Star A: moves downward along main ring
       const angleA = lerp(startAngleA, endAngleA, fracA);
-      placeStar(starElA, sunVX + ringRadius  * Math.cos(angleA), sunVY + ringRadius  * Math.sin(angleA));
+      placeStar(starElA, sunVX + ringRadius  * Math.cos(angleA), sunVY + ringRadius  * Math.sin(angleA), starACache);
 
       // Star B: moves upward along smaller ring (mirrored Y angle)
       const angleB = lerp(startAngleB, endAngleB, fracB);
-      placeStar(starElB, sunVX + ringRadiusB * Math.cos(angleB), sunVY + ringRadiusB * Math.sin(angleB));
+      placeStar(starElB, sunVX + ringRadiusB * Math.cos(angleB), sunVY + ringRadiusB * Math.sin(angleB), starBCache);
     };
 
     let cachedBaseMax = 0;
