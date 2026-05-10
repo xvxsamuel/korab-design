@@ -20,7 +20,7 @@ export default function About() {
             alt="Korab"
             className="about-img"
             width="800"
-            height="1200"
+            height="1000"
             loading="lazy"
             decoding="async"
           />
