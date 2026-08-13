@@ -99,11 +99,8 @@ export default function App() {
           <Star className="sun-inline" />
         </span>
       </div>
-      <div className="star-b" aria-hidden="true">
-        <span className="brand-orbit-body brand-orbit-body-b">
-          <Star className="sun-inline" />
-        </span>
-      </div>
+      {/* The second star is no longer its own element — the works train in
+          Works.tsx rides ring B and inherits its start and landing. */}
 
 
       <Cursor />

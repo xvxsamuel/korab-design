@@ -5,9 +5,6 @@ export default function Contact() {
     <section id="contact" className="contact">
       <h2 className="section-title">Contact</h2>
       <div className="contact-body">
-        <p className="contact-lead">
-          Got a project in mind? Let's talk.
-        </p>
         <a className="contact-email" href={`mailto:${EMAIL}`}>
           <span className="contact-chevron" aria-hidden="true">
             <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -30,10 +27,14 @@ export default function Contact() {
           </span>
           <span className="sr-only">{EMAIL}</span>
         </a>
-        <p className="contact-note">
-          Open to full-time roles and freelance work.<br />
-          Available on-site and remotely.
-        </p>
+        <div className="contact-note">
+          <p className="contact-text">
+            I'm looking for a full-time role, but always eager to gain experience, so don't hesitate to contact me.
+          </p>
+          <p className="contact-text">
+            Based in The Hague, open to on-site and remote work.
+          </p>
+        </div>
       </div>
     </section>
   );

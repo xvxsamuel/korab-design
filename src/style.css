@@ -27,6 +27,13 @@
   --display:  'DeFonte', 'Helvetica Neue', sans-serif;
   --body:     'Amiamie', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --ease-soft: cubic-bezier(0.2, 0.9, 0.2, 1);
+  /* One size for all Amiamie running text. 18px, and not an accident:
+     Amiamie's i-dot clears its stem by under a device pixel, and whether
+     the gap survives rasterisation alternates with size (measured: 15 ok,
+     16 fused, 17 ok, 18 ok, 19 fused, 20 ok, 21 fused at 1:1 scaling).
+     18 keeps the widest margin of the readable sizes. Change it only in
+     whole pixels, and re-check the i's. */
+  --body-text: 18px;
   --gutter:   56px;
   --sun-size: 46vmin;
 }
@@ -112,6 +119,17 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   /* Position via transform (not left/top) so per-frame moves stay on the
      compositor — no layout/paint of the page each mousemove. */
   will-change: transform, width, height, border-radius, background;
+}
+/* Scissors face — Cursor.tsx drives opacity/scale/rotation per frame as the
+   dot morphs over a flower's cut zone. */
+.cursor-scissors {
+  position: absolute;
+  inset: 15%;
+  width: 70%;
+  height: 70%;
+  display: block;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Nav ---------------------------------------------------------------- */
@@ -301,13 +319,12 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
 
 /* sun-fade-in: added by useSunAnimation after elements are positioned.
    Two-class selectors carry specificity 0,2,0 so they beat the per-element
-   `opacity: 0` rules (.sun-orbit, .star-a, .star-b) defined later in source.
+   `opacity: 0` rules (.sun-orbit, .star-a) defined later in source.
    For stars the animation below owns opacity anyway, but this keeps the
    cascade consistent. */
 .sun-trace.sun-fade-in,
 .sun-orbit.sun-fade-in,
-.star-a.sun-fade-in,
-.star-b.sun-fade-in {
+.star-a.sun-fade-in {
   opacity: 1;
 }
 
@@ -365,10 +382,10 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   to { stroke-dashoffset: 0; }
 }
 
-/* Both orbit stars — position: fixed, pure viewport space, JS drives position + size.
-   Outer .star-a/.star-b owns position (transform set by JS); the spin lives
-   on the innermost SVG. */
-.star-a, .star-b {
+/* Orbit star — position: fixed, pure viewport space, JS drives position +
+   size. The outer .star-a owns position (transform set by JS); the spin
+   lives on the innermost SVG. */
+.star-a {
   position: fixed;
   left: 0; top: 0;
   pointer-events: none;
@@ -395,14 +412,26 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   inherits: false;
   initial-value: 13px;
 }
-.star-a.sun-fade-in,
-.star-b.sun-fade-in {
+.star-a.sun-fade-in {
   opacity: 1;
   filter: blur(var(--star-blur)) url(#starThreshold);
   animation: star-ink-bloom 1.8s cubic-bezier(0.32, 0, 0.67, 0) both;
 }
-.star-b.sun-fade-in {
-  animation-delay: 0.15s;
+/* The works train's entrance — a soft fade-and-focus, deliberately without
+   the title's threshold filter (four dense paths under an animated SVG
+   reference filter is enough concurrent rasterisation to hang a weak GPU).
+   It animates the GEAR WRAPPER, not a face: the faces' idle gear-spin must
+   start at mount and never be displaced, or the two faces end up
+   permanently out of rotational phase with each other (an animation on a
+   face REPLACES its spin; on the wrapper they compose). The hook strips the
+   class on animationend so the blur filter doesn't outlive the entrance. */
+.works-orbit.sun-fade-in .work-body-gear {
+  filter: blur(var(--star-blur));
+  animation: work-star-bloom 1.8s cubic-bezier(0.32, 0, 0.67, 0) 0.15s both;
+}
+@keyframes work-star-bloom {
+  from { --star-blur: 13px; opacity: 0; }
+  to   { --star-blur: 0px;  opacity: 1; }
 }
 @keyframes star-ink-bloom {
   from { --star-blur: 13px; }
@@ -419,11 +448,9 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   height: 100%;
   z-index: 1;
 }
-.star-a .sun-inline,
-.star-b .sun-inline {
+.star-a .sun-inline {
   animation: brand-spin 90s linear infinite;
 }
-.star-b .sun-inline { animation-duration: 50s; }
 @keyframes brand-spin { to { transform: rotate(360deg); } }
 
 /* Skip on-mount entry animations when the page loads partway scrolled. The
@@ -445,14 +472,17 @@ html.no-entry-anim .sun-ring-inner {
 }
 html.no-entry-anim .sun-trace,
 html.no-entry-anim .sun-orbit,
-html.no-entry-anim .star-a,
-html.no-entry-anim .star-b {
+html.no-entry-anim .star-a {
   opacity: 1 !important;
   animation: none !important;
 }
-html.no-entry-anim .star-a,
-html.no-entry-anim .star-b {
+html.no-entry-anim .star-a {
   filter: none !important;
+}
+html.no-entry-anim .works-orbit.sun-fade-in .work-body-gear {
+  animation: none !important;
+  filter: none !important;
+  opacity: 1;
 }
 html.no-entry-anim .hero-name .row {
   filter: none !important;
@@ -475,6 +505,14 @@ html.no-entry-anim .hero-name .row {
   margin-right: 0;
   vertical-align: -0.06em;
   visibility: hidden;
+  /* The row centres its flex items, which left the mark's bottom tip hanging
+     0.019em past the ink bottom of the K (measured against the font's own
+     actualBoundingBoxDescent at both ends of the type scale — the offset is
+     proportional, so one em-based nudge fixes every width). Sits the mark
+     flush on the title's baseline. useSunAnimation reads this element's
+     rect, so the live star follows the nudge. */
+  position: relative;
+  top: -0.019em;
 }
 .sun-inline {
   color: var(--accent);
@@ -629,102 +667,272 @@ section {
 
 /* Works -------------------------------------------------------------- */
 
-.works-list { list-style: none; margin: 0; padding: 0; }
-.work-row-wrap { list-style: none; }
-.work-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: baseline;
-  padding: 32px 0;
-  transition: transform 0.5s var(--ease-soft);
-  background: none;
+/* The section is a scroll runway. The runway's length is the crawl's scroll
+   budget — the schedule's stage sweep is spread across it, so this height is
+   what buys each presentation its dwell time (~700-900px of scroll per work
+   at this length). The pin wrapper holds the title for the WHOLE sequence:
+   it deliberately overflows the runway so the sticky release lands where the
+   last presentation folds (runway end − 100vh + 80vh ≈ the close backstop),
+   and only then does the page hand over to contact. The old early release
+   predates the presented-point fold — bodies now close geometrically before
+   their exit path reaches the title's corner, so nothing clips it while it
+   stays. */
+.works-runway { height: 370vh; }
+.works-pin { height: calc(100% + 50vh); }
+.works-stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  pointer-events: none;
+}
+.works-stage .section-title { margin-bottom: 0; }
+
+.works-orbit {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.work-body {
+  /* Box of the star mark. The image circle inside is sized off the mark's own
+     valley radius (0.3285 of the box, see src/lib/gears.ts): at 58% a ring of
+     star body still shows at the valleys, so the silhouette stays a star. */
+  --mark: clamp(88px, 12vw, 176px);
+  --disc: 58%;
+  position: absolute;
+  left: 0; top: 0;
+  width: var(--mark);
+  height: var(--mark);
+  padding: 0;
   border: 0;
+  background: none;
   font: inherit;
   color: inherit;
-  text-align: left;
-  width: 100%;
+  /* Ambient star until the morph — the hook adds .is-live once it's a work. */
+  pointer-events: none;
   cursor: none;
+  will-change: transform;
 }
-.work-row:hover { transform: translateX(10px); }
-.work-row-wrap.is-open .work-row { transform: translateX(10px); }
-.work-main {
-  display: grid;
-  grid-template-columns: 48px 1fr auto;
-  gap: 40px;
-  align-items: baseline;
-  padding-right: 48px;
+.work-body.is-live { pointer-events: auto; }
+.work-body:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 7px;
+  border-radius: 50%;
 }
-.work-row .num {
+/* The morph between the body's two faces rides the one --in the hook writes,
+   as consecutive overlapping phases: the faces cross-fade first (0→0.3), the
+   solid face sharpens as the mark grows (through ~0.8), the image opens
+   inside it (0.35→0.8), the label arrives last (0.7→1). `scale` composes
+   with the hover transform below, so the two never fight over one property. */
+.work-body-mark {
   position: relative;
-  display: inline-block;
-  width: fit-content;
-  justify-self: start;
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink-soft);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.08em;
-  transition: color 0.3s ease;
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Second factor is the menu focus: the body nearest the viewport centre
+     carries --focus ≈ 1 and swells; its neighbours ease down. */
+  /* The focus factor saturates early (same plateau as the label), so the
+     presented body holds full size through the centre instead of peaking
+     for a single instant. */
+  scale: calc(
+    (0.52 + 0.48 * clamp(0, var(--in, 0) * 1.25, 1)) *
+    (0.9 + 0.18 * clamp(0, var(--focus, 0) * 2, 1))
+  );
+  transition: transform 0.5s var(--ease-soft);
 }
-.work-row .num-text {
-  position: relative;
-  z-index: 1;
+/* Ornate face — star B's own mark, cut-outs and all. Turns with the orbit
+   and hands over to the solid face in the morph's first stretch. Both faces
+   also idle-spin like the big orbit star (gear-spin below), on top of the
+   scroll-driven rotation. */
+.work-body-holey {
+  animation: gear-spin 80s linear infinite;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--accent);
+  rotate: var(--spin, 0deg);
+  opacity: clamp(0, calc(1 - var(--in, 0) * 3.3), 1);
 }
-.work-row .num-star {
+.work-body-star {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--accent);
+  animation: gear-spin 80s linear infinite;
+  /* Orbital angle, written per frame by useSunAnimation. Only the mark turns —
+     the project inside stays upright and readable. */
+  rotate: var(--spin, 0deg);
+  /* No filters in the scroll morph — a straight cross-fade with the ornate
+     face. Blur read as smear and the threshold cut read as spikes; both were
+     tried and pulled. The whole morph is opacity + scale. */
+  opacity: clamp(0, calc(var(--in, 0) * 3.3), 1);
+  transition: color 0.35s var(--ease-soft);
+}
+.work-body-disc {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 38px;
-  height: 38px;
-  color: var(--accent);
-  transform: translate(-50%, -50%) scale(0) rotate(-90deg);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 0;
-  transition:
-    transform 0.45s var(--ease-soft),
-    opacity 0.3s ease;
+  width: var(--disc);
+  height: var(--disc);
+  /* Scale lives INSIDE the transform, after the centering translate. As a
+     standalone `scale` property it would compose before `transform`, scaling
+     the -50%,-50% offset with it — which slid the disc's origin toward the
+     mark's lower-right corner and made the image grow in from the side
+     instead of from the centre. */
+  transform: translate(-50%, -50%) scale(clamp(0, calc((var(--in, 0) - 0.35) * 2.25), 1));
+  border-radius: 50%;
+  overflow: hidden;
 }
-.work-row:hover .num-star,
-.work-row-wrap.is-open .num-star {
-  transform: translate(-50%, -50%) scale(1) rotate(0deg);
-  opacity: 1;
+.work-body-label {
+  /* Gated by the morph, weighted by the menu focus. The focus factor
+     saturates at ~0.6 rather than 1.0, which turns the full-colour moment
+     from a knife-edge at the exact presented point into a plateau about
+     ±13° of arc wide — the fades in and out sit further apart and the text
+     holds full strength between them. */
+  opacity: calc(
+    clamp(0, (var(--in, 0) - 0.35) * 1.8, 1) *
+    (0.3 + 0.7 * clamp(0, var(--focus, 0) * 2, 1))
+  );
 }
-.work-row .title {
+.work-body-disc img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.work-body-gear {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.5s var(--ease-soft);
+}
+.work-body:hover .work-body-gear,
+.work-body:focus-visible .work-body-gear {
+  transform: rotate(48deg);
+}
+/* While the hand turns the gear, its idle spin holds still — one rotation
+   source at a time. Resuming from pause continues where it left off, so
+   there's no snap on unhover. */
+.work-body:hover .work-body-holey,
+.work-body:hover .work-body-star,
+.work-body:focus-visible .work-body-holey,
+.work-body:focus-visible .work-body-star {
+  animation-play-state: paused;
+}
+.work-body-label {
+  position: absolute;
+  top: calc(100% + 20px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  white-space: nowrap;
+  color: var(--ink);
+}
+/* Sized like a heading, not a caption — the focus gating means only the
+   presented body's label reads at full strength, so it can afford to. */
+.work-body-name {
   font-family: var(--display);
   font-weight: 500;
-  font-size: clamp(28px, 3.2vw, 44px);
-  letter-spacing: -0.005em;
-  line-height: 1;
-}
-.work-row .title .role { color: var(--ink-soft); }
-.work-row .tags {
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink-soft);
-  white-space: nowrap;
-  letter-spacing: 0.04em;
-}
-.work-row .year {
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.08em;
-  text-align: right;
-  padding-left: 40px;
+  font-size: clamp(20px, 1.9vw, 28px);
+  letter-spacing: -0.01em;
   transition: color 0.3s ease;
 }
-.work-row:hover .num,
-.work-row-wrap.is-open .num { color: var(--ink); }
-.work-row:hover .year,
-.work-row-wrap.is-open .year { color: var(--accent); }
-.rule-row {
-  width: 100%;
-  height: 1px;
-  background: var(--ink-faint);
-  list-style: none;
+.work-body-year {
+  font-family: var(--body);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
 }
+
+
+/* Flat browse view. The orbit needs a wide viewport, a pointer and motion, so
+   below the breakpoint — or with either of the other two missing — the same
+   projects list out instead. */
+.works-grid {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.works-grid li {
+  list-style: none;
+  border-top: 1px solid var(--ink-faint);
+}
+.works-grid li:last-child { border-bottom: 1px solid var(--ink-faint); }
+.work-card {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  padding: 16px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.work-card-mark {
+  position: relative;
+  display: block;
+  width: 96px;
+  height: 96px;
+  /* Same valley-radius ratio as the orbit bodies — star silhouette holds. */
+  --disc: 58%;
+}
+.work-card-star {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--accent);
+}
+.work-card-disc {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--disc);
+  height: var(--disc);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  overflow: hidden;
+}
+.work-card-disc img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.work-card-name {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(20px, 5vw, 28px);
+  line-height: 1;
+  letter-spacing: -0.005em;
+}
+.work-card-year {
+  font-family: var(--body);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reduced motion: nothing drives the orbit, so useSunAnimation flags the
+   document and the flat list takes over. */
+html.no-orbit .works-runway { height: auto; }
+html.no-orbit .works-pin { height: auto; }
+html.no-orbit .works-stage { position: static; height: auto; }
+html.no-orbit .works-stage .section-title { margin-bottom: 40px; }
+html.no-orbit .works-orbit { display: none; }
+
+html.no-orbit .works-grid { display: block; }
 
 .work-panel-flowers {
   position: absolute;
@@ -736,57 +944,34 @@ section {
   z-index: 0;
 }
 
-/* Cog cluster — three equal-size interlocked star-cogs.
-   A is the upper-left, C sits directly below A (vertical mesh),
-   B sits up-right of A meshing with it. B and C do not touch. */
-/* Cog cluster — three equal 120px stars, geometrically meshed.
-   Star geometry from star.svg (viewBox 191×200, preserveAspectRatio=meet):
-     - Rendered scale: 120/200 = 0.6 (height-bound), so star is 114.6×120 in a 120 box.
-     - Tip radius:  103 viewBox units × 0.6 = 61.8px
-     - Gap radius:   91.6 viewBox units × 0.6 = 55.0px
-     - Mesh distance (tip-to-gap-floor) = 61.8 + 55.0 = 116.8px between centers.
-   12 teeth → 30° per tooth → 15° phase offset for tip-into-gap.
-   Meshing axes are placed on multiples of 30° from A so A's teeth align exactly.
-     - A→B axis at 30° below horizontal (right-and-down)
-     - A→C axis at 240° (left-and-down) */
+/* Gear trains -------------------------------------------------------- */
+
+/* Box size, centre offsets and the static phase that seats each gear's teeth
+   into its neighbour's are all computed in src/lib/gears.ts and applied
+   inline. The only thing left to CSS is the spin the whole train shares.
+   Equal period + alternating direction is what holds a meshed pair's phase
+   sum constant, which is why the teeth stay slotted indefinitely rather than
+   drifting apart. */
+.gear-cw  { animation: gear-spin var(--gear-period, 40s) linear infinite; }
+.gear-ccw { animation: gear-spin var(--gear-period, 40s) linear infinite reverse; }
+@keyframes gear-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .gear-cw, .gear-ccw,
+  .work-body-holey, .work-body-star { animation: none; }
+}
+
+/* Cog cluster in the project panel: A drives B (down-right) and C
+   (down-left); B and C never touch, so the chain stays open. */
 .cogs {
+  --gear-period: 26s;
   position: relative;
-  width: 279px;
-  height: 221px;
-  margin: auto auto 0;
+  margin: auto 0 0;
   pointer-events: none;
   color: var(--accent);
   opacity: 0.85;
 }
-.cog {
-  position: absolute;
-  display: block;
-  width: 120px;
-  height: 120px;
-}
+.cog { position: absolute; display: block; }
 .cog svg { display: block; width: 100%; height: 100%; }
-.cog-a {
-  top: 0;
-  left: 58px;
-}
-.cog-a svg { animation: cog-spin-cw 24s linear infinite; }
-.cog-b {
-  top: 58px;
-  left: 159px;
-  transform: rotate(15deg);
-}
-.cog-b svg { animation: cog-spin-ccw 24s linear infinite; }
-.cog-c {
-  top: 101px;
-  left: 0;
-  transform: rotate(15deg);
-}
-.cog-c svg { animation: cog-spin-ccw 24s linear infinite; }
-@keyframes cog-spin-cw  { to { transform: rotate(360deg); } }
-@keyframes cog-spin-ccw { to { transform: rotate(-360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .cog-a, .cog-b, .cog-c { animation: none; }
-}
 .bg-flower {
   position: absolute;
   bottom: 0;
@@ -798,9 +983,16 @@ section {
   left: 50%;
   bottom: 0;
   top: 0;
+  /* 1px hairline, deliberately NOT centred: translateX(-50%) of a 1px box
+     is a half-pixel offset, which parked the stem's edges exactly on pixel
+     boundaries — whether it rasterised at all then depended on the
+     compositor's rounding (it vanished on some GPU/zoom setups once the
+     layerization around the footer changed). Anchoring flush to the 50%
+     line keeps whole-pixel edges; the half-pixel of visual off-centre
+     against the star is imperceptible. */
   width: 1px;
   background: var(--rule);
-  transform: translateX(-50%) scaleY(0);
+  transform: scaleY(0);
   transform-origin: bottom center;
 }
 .work-panel.is-open .bg-flower-stem,
@@ -808,7 +1000,7 @@ footer.is-grown .bg-flower-stem {
   animation: flower-grow var(--grow, 2s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 @keyframes flower-grow {
-  to { transform: translateX(-50%) scaleY(1); }
+  to { transform: scaleY(1); }
 }
 .bg-flower-leaf {
   position: absolute;
@@ -816,6 +1008,14 @@ footer.is-grown .bg-flower-stem {
   overflow: visible;
   opacity: 0;
   z-index: 2;
+}
+/* The leaf svg lives inside a span wrapper (the wrapper is what animates,
+   positions, and hit-tests); the svg just fills it. */
+.bg-flower-leaf-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 .bg-flower-leaf-edge {
   stroke: var(--rule);
@@ -865,6 +1065,11 @@ footer.is-grown .bg-flower-leaf--left {
   display: block;
   opacity: 0;
 }
+.bg-flower-star-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 .work-panel.is-open .bg-flower-star,
 footer.is-grown .bg-flower-star {
   animation: star-bloom var(--grow, 2s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -875,30 +1080,94 @@ footer.is-grown .bg-flower-star {
   100% { top: 0%;   transform: translate(-50%, -100%) scale(1);    opacity: 1; }
 }
 
-/* Click hit-target for the flower easter egg. The bg-flower span itself has
-   zero width (children are positioned around its center), so we overlay a
-   roomy transparent box that covers the visible extent — leaves on both
-   sides, plus the star above the stem — and re-enable pointer events on it
-   even though the parent flower container is pointer-events: none.
-
-   Sized to comfortably enclose the worst-case visual: leaves can reach ~46px
-   from the stem center after rotation, and the star can be up to ~80px wide
-   (so ~40px out from center). The 70px horizontal buffer leaves a few px of
-   slack on either side so clicks just outside a leaf or star edge still
-   register. The top buffer pads above the bloom; the bottom buffer pads
-   below the soil line. */
+/* Hit-targets for the flower easter egg: the visuals themselves. The bloom
+   wrapper, the stem, and each leaf carry .bg-flower-hit directly, so pointer
+   hit-testing follows their own transforms — a half-bloomed star is exactly
+   half as clickable, a rotated leaf hits along its rotated box, and an
+   ungrown stem (scaleY 0) can't be hit at all. Nothing hand-derived to
+   drift out of the visuals' sync. The ::after halos add a few px of
+   forgiveness around each shape (pseudo-elements hit-test as part of their
+   element, and they inherit its transform). */
 .bg-flower-hit {
-  position: absolute;
-  bottom: -6px;
-  left: -70px;
-  right: -70px;
-  top: calc(-1 * var(--star-size, 60px) - 10px);
   pointer-events: auto;
-  z-index: 3;
 }
-.bg-flower.is-cutting .bg-flower-hit {
+.bg-flower-hit--head::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+/* The stem hairline is 1px; the halo widens it into a graspable band that
+   still grows with the stem's own scaleY. */
+.bg-flower-hit--stem::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -11px;
+  right: -11px;
+}
+.bg-flower-hit--leaf::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+}
+/* Cuts are accepted only while the plant is idle, and never on a falling
+   clone — the same rule the component's state machine enforces in JS. */
+.bg-flower.is-cutting .bg-flower-hit,
+.bg-flower.is-regrowing .bg-flower-hit,
+.bg-flower-cut-top .bg-flower-hit,
+.bg-flower-leaf-fall .bg-flower-hit {
   pointer-events: none;
 }
+
+/* Kept cuts (head, or stem within the top 30%): the standing plant neither
+   fades nor regenerates — only the sweep runs on the main body, holding the
+   below-line region. */
+.bg-flower.is-cutting--keep.is-cutting--from-left .bg-flower-main {
+  animation: flower-cut-sweep-from-left 160ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+.bg-flower.is-cutting--keep.is-cutting--from-right .bg-flower-main {
+  animation: flower-cut-sweep-from-right 160ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+/* After the fall, the missing top wipes back in upward from the same cut
+   line — regrowth from the wound, not a remount. */
+.bg-flower.is-regrowing .bg-flower-main {
+  animation: flower-regrow-top 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes flower-regrow-top {
+  from {
+    clip-path: polygon(
+      -200px 9999px,
+      200px 9999px,
+      200px var(--cut-right, 0px),
+      -200px var(--cut-left, 0px)
+    );
+  }
+  to {
+    clip-path: polygon(
+      -200px 9999px,
+      200px 9999px,
+      200px -9999px,
+      -200px -9999px
+    );
+  }
+}
+
+/* A falling leaf clone. The standing plant's copy of a cut leaf simply
+   isn't rendered (leaf stubs unmount), so there is no hidden-but-mounted
+   state to leak clicks or animations. */
+.bg-flower-leaf-fall {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  animation: flower-cut-top-fall 700ms cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
+}
+.bg-flower-leaf-fall .bg-flower-leaf {
+  animation: none !important;
+  opacity: 1;
+}
+.bg-flower-leaf-fall .bg-flower-leaf--right { transform: rotate(-30deg) scale(1); }
+.bg-flower-leaf-fall .bg-flower-leaf--left { transform: rotate(30deg) scale(1); }
 
 /* Easter egg: clicking a flower drives a knife-style cut. The blade enters
    from a random side and sweeps across the flower at a slight random tilt
@@ -968,7 +1237,7 @@ footer.is-grown .bg-flower-star {
    afterward because no animation overrides them. */
 .bg-flower-cut-top .bg-flower-stem {
   animation: none !important;
-  transform: translateX(-50%) scaleY(1);
+  transform: scaleY(1);
 }
 .bg-flower-cut-top .bg-flower-leaf {
   animation: none !important;
@@ -1196,7 +1465,16 @@ footer.is-grown .bg-flower-star {
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* The panel scrolls its own content — the page behind stays frozen. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  /* Re-resolve against the layer's palette: the html-level scrollbar-color
+     already froze the root ink, and inheritance passes on the resolved
+     value, not the var() — without this Firefox would paint the root-green
+     thumb inside an amber panel. (The webkit path re-reads var(--ink) at
+     this element on its own.) */
+  scrollbar-color: var(--ink) transparent;
 }
 /* Sibling of .work-panel (not a child) so it renders in the root stacking context,
    allowing the morphing cursor pill (z-index 61) to slide behind the icon (z-index 62). */
@@ -1347,23 +1625,15 @@ footer.is-grown .bg-flower-star {
   max-width: 1280px;
   margin: 0 auto;
   width: 100%;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  /* Fills the panel when short, but never shrinks below its content —
+     longer case studies push past the fold and the inner scrolls. */
+  flex: 1 0 auto;
 }
 .work-panel-text {
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-.work-panel-num {
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink-soft);
-  letter-spacing: 0.12em;
-  display: block;
-  margin-bottom: clamp(8px, 1.5vh, 16px);
 }
 .work-panel-title {
   font-family: var(--display);
@@ -1375,24 +1645,24 @@ footer.is-grown .bg-flower-star {
   color: var(--ink);
 }
 .work-panel-blurb {
-  font-family: var(--display);
-  font-weight: 500;
-  font-size: clamp(16px, 1.5vw, 22px);
-  line-height: 1.25;
-  letter-spacing: -0.005em;
+  /* Body face, not display: DeFonte's lowercase i fuses its dot into the
+     stem and reads as an l in running text — fine in titles, wrong in a
+     sentence. Amiamie matches the contact note and panel body. */
+  font-family: var(--body);
+  font-weight: 400;
+  font-size: var(--body-text);
+  line-height: 1.45;
   color: var(--ink);
   margin: 0 0 clamp(10px, 1.5vh, 20px);
-  max-width: 36ch;
+  max-width: 44ch;
 }
 .work-panel-body {
   font-family: var(--body);
-  font-size: clamp(13px, 1.05vw, 15px);
+  font-size: var(--body-text);
   line-height: 1.55;
   color: var(--ink-soft);
   margin: 0 0 clamp(14px, 2.4vh, 28px);
   max-width: 52ch;
-  min-height: 0;
-  overflow: hidden;
 }
 .work-panel-meta {
   display: grid;
@@ -1417,111 +1687,163 @@ footer.is-grown .bg-flower-star {
   margin: 0;
   line-height: 1.4;
 }
-.work-panel-images {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1.4fr 1fr;
-  gap: 12px;
+.work-panel-media {
+  margin: 0;
   height: 100%;
   min-height: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--ink-faint);
 }
-.work-image-placeholder {
-  background: rgba(68, 91, 75, 0.08);
-  border: 1px solid var(--ink-faint);
-  border-radius: 4px;
+.work-panel-media img {
+  display: block;
   width: 100%;
   height: 100%;
-  min-height: 0;
+  object-fit: cover;
 }
-.work-image-placeholder.wide { grid-column: 1 / -1; }
-.work-image-placeholder.tall { grid-column: 2; grid-row: 2; }
 
 /* About -------------------------------------------------------------- */
 
+/* Tighter hand-off into the works stage. The works title pins the instant
+   the section's top reaches y=0, so every pixel of gap ahead of it is scroll
+   spent watching the title still climb — and the train starts arriving right
+   about then. Trimmed from the standard 200px. */
+.about { padding-bottom: 170px; }
+
+/* Two bands: portrait + capabilities on the left, lead + bio on the right.
+   One shared width feeds the portrait, the capabilities column, and the grid
+   track, so they can never drift apart. `stretch` + the bio's auto top
+   margin bottom-align the prose with the capabilities list. */
 .about-body {
+  --portrait-w: clamp(176px, 20vw, 280px);
   display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 56px;
-  align-items: start;
+  grid-template-columns: minmax(0, var(--portrait-w)) minmax(0, 1fr);
+  gap: clamp(40px, 5vw, 88px);
+  align-items: stretch;
+}
+/* Left band stacks portrait over capabilities; the right band is the lead
+   (a thesis statement, closed off by a hairline) over the bio. */
+.about-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: clamp(30px, 3.2vw, 44px);
 }
 .about-lead {
   font-family: var(--display);
   font-weight: 500;
-  font-size: clamp(22px, 2.4vw, 32px);
-  letter-spacing: -0.01em;
-  line-height: 1.1;
+  font-size: clamp(26px, 3.1vw, 44px);
+  letter-spacing: -0.015em;
+  line-height: 1.08;
   color: var(--ink);
-  margin: 0 0 32px;
+  max-width: 22ch;
+  margin: 0 0 clamp(30px, 3.4vw, 48px);
+}
+.about-left {
+  display: flex;
+  flex-direction: column;
+}
+/* Paragraph block: pushed to the row's bottom edge so its last line sits
+   level with the capabilities list; spaced paragraphs, not a wall of text. */
+.about-bio {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 46ch;
 }
 .about-text {
   font-family: var(--body);
-  font-size: 16px;
-  line-height: 1.65;
+  font-size: var(--body-text);
+  line-height: 1.7;
   color: var(--ink);
-  margin: 0 0 16px;
-  max-width: 48ch;
+  margin: 0;
 }
 .about-text:last-child { margin-bottom: 0; }
-.about-img-wrap {
-  position: sticky;
-  top: 120px;
+
+/* The portrait sits inside an orbit ring, like every other body on the page.
+   The ring is the element's own border and the image is padded in from it, so
+   the outer circle still lines up flush with the section's left edge. */
+.about-portrait {
+  position: relative;
+  width: var(--portrait-w);
+  /* Explicit height, not aspect-ratio: the ratio was being defeated by the
+     flex context and quietly stretched the circle into an oval. */
+  height: var(--portrait-w);
+  border-radius: 50%;
+  border: 1px solid rgba(68, 91, 75, 0.22);
+  padding: 22px;
+}
+.about-img-crop {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--ink-faint);
 }
 .about-img {
-  width: 100%;
-  /* `height: auto` defeats the `height` HTML attr (which the browser applies
-     as a low-specificity presentation hint). Without this override the attr
-     locks the rendered height to its raw pixel value and `aspect-ratio` is
-     ignored — that's how a 200px-wide column ended up rendering at 1200px
-     tall after the perf pass added width/height attrs to the <img>. */
-  height: auto;
-  aspect-ratio: 4 / 5;
+  /* Zoomed past the crop circle so the framing has real slack in both axes,
+     then aimed with object-position — the only two knobs: X% < 50 slides
+     the subject right, Y% < 50 slides it down. */
+  width: 118%;
+  height: 118%;
+  margin: -9% 0 0 -9%;
   object-fit: cover;
-  object-position: center 50%;
-  border-radius: 6px;
+  object-position: 36% 44%;
   display: block;
 }
-.about-meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 40px;
-  margin-top: 40px;
-  max-width: 48ch;
-}
-.about-meta-block { min-width: 0; }
-.about-meta-title {
-  font-family: var(--body);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  margin: 0 0 12px;
-}
-.about-services,
-.about-contact {
+/* Capabilities — a plain list bulleted with the works' waymark mark, sat
+   under the portrait and centred on its axis so the "who" and the "what"
+   read as one column. Width matches .about-portrait's clamp. */
+.about-capabilities {
   list-style: none;
+  /* Fills the column below the portrait and distributes the rows evenly
+     through it (gap is the minimum spacing; space-between spreads the
+     rest). The 6px bottom margin is optical: the bio's 18px/1.7 text
+     carries ~6px of half-leading below its last baseline, and without the
+     compensation the list's line-height-1 rows read as sitting lower even
+     when the boxes align exactly. */
+  flex: 1 0 auto;
+  justify-content: space-between;
+  margin: 0 0 6px;
   padding: 0;
-  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-family: var(--body);
-  font-size: 14px;
-  line-height: 1.5;
+  gap: 15px;
+  width: var(--portrait-w);
+}
+.about-capabilities li {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(20px, 1.8vw, 26px);
+  letter-spacing: -0.005em;
+  line-height: 1;
   color: var(--ink);
 }
-.about-contact-link {
-  color: var(--ink);
-  text-decoration: none;
-  border-bottom: 1px solid var(--ink-faint);
-  transition: border-color 0.2s ease, color 0.2s ease;
-}
-.about-contact-link:hover {
+.capability-star {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
   color: var(--accent);
-  border-bottom-color: var(--accent);
 }
 
 /* Contact ------------------------------------------------------------ */
+
+/* The page's last screen is composed against the viewport, not the document:
+   the title parks a few vh from the top, the email sits just beneath the
+   parked sun, and everything below the note is open sky down to the flower
+   bed. The 100vh−665px pair puts the title's box top at y≈0 at full scroll
+   on every viewport height — the same spot the works title pins at, so the
+   two section endings rhyme. The email clears the parked sun's ring because
+   the sun ends high (SUN_END grid (1,1)); the text itself never moves to
+   accommodate the sun. 665px is the measured height of the contact content
+   + footer block; the clamp floors it for short viewports (where the orrery
+   yields to the flat layout anyway). */
+.contact { padding-bottom: clamp(120px, calc(100vh - 740px), 520px); }
 
 .contact-body {
   display: flex;
@@ -1530,15 +1852,6 @@ footer.is-grown .bg-flower-star {
   text-align: left;
   gap: 28px;
   padding-top: 8px;
-}
-.contact-lead {
-  font-family: var(--body);
-  font-weight: 400;
-  font-size: clamp(18px, 1.6vw, 22px);
-  letter-spacing: 0;
-  line-height: 1.4;
-  color: var(--ink);
-  margin: 0;
 }
 .contact-email {
   position: relative;
@@ -1669,12 +1982,17 @@ footer.is-grown .bg-flower-star {
   .contact-email:hover .contact-chevron svg { animation: none; }
 }
 .contact-note {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   font-family: var(--body);
-  font-size: 15px;
+  font-size: var(--body-text);
   line-height: 1.65;
   color: var(--ink);
   margin: 0;
+  max-width: 46ch;
 }
+.contact-note p { margin: 0; }
 
 /* Footer ------------------------------------------------------------- */
 
@@ -1840,20 +2158,14 @@ footer {
     margin-bottom: 40px;
     padding-top: 100px;
   }
-  .work-row { grid-template-columns: 1fr auto; }
-  .work-main { grid-template-columns: 28px 1fr; gap: 14px; padding-right: 20px; }
-  .work-row .tags { display: none; }
-  .work-row .year { padding-left: 16px; font-size: 12px; }
   .work-panel { width: 100vw; }
   .work-panel-inner { padding: 64px var(--gutter); }
   .work-panel-content { grid-template-columns: 1fr; gap: 28px; }
   .work-panel-meta { grid-template-columns: 1fr 1fr; gap: 20px; }
-  .work-panel-images { grid-template-columns: 1fr; }
-  .work-image-placeholder.wide { grid-column: auto; }
-  .about-body { grid-template-columns: 1fr; gap: 32px; }
-  .about-img-wrap { position: static; max-width: 160px; }
-  .about-img { aspect-ratio: 4 / 5; }
-  .about-meta { grid-template-columns: 1fr; gap: 28px; margin-top: 32px; }
+  .work-panel-media { height: 36vh; }
+  .about-body { --portrait-w: clamp(148px, 42vw, 220px); grid-template-columns: 1fr; gap: 40px; }
+  .about-lead { max-width: none; }
+  .about-bio { margin-top: 0; }
   .contact-email {
     font-size: clamp(22px, 6vw, 36px);
     /* Cap so the hover-expanded pill (chevron + extra padding) stays inset from
@@ -1902,6 +2214,22 @@ footer {
   .cursor { display: none; }
 }
 
+/* Small-viewport units where supported: on phones `vh` is the height with the
+   URL bar hidden, so a 100vh hero is taller than the visible page on load and
+   reflows as the bar slides away. `svh` is the always-visible height, which
+   keeps the hero and the works runway stable through that transition. */
+@supports (height: 100svh) {
+  .hero,
+  .hero-inner { min-height: 100svh; }
+  .works-stage { height: 100svh; }
+  .works-pin { height: calc(100% + 50svh); }
+  .works-runway { height: 370svh; }
+}
+
+/* The orbit is the works view on every device; only reduced motion (where
+   nothing drives it) falls back to the flat list, via html.no-orbit above.
+   Touch loses hover niceties but tap still opens a morphed body. */
+
 @media (prefers-reduced-motion: reduce) {
   .scroll-cue,
   .brand-mark,
@@ -1924,7 +2252,7 @@ footer {
     stroke-dashoffset: 0 !important;
     animation: none !important;
   }
-  .star-a, .star-b {
+  .star-a {
     scale: 1 !important;
     opacity: 1 !important;
     animation: none !important;

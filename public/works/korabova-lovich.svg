@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
+  <!-- Placeholder artwork. Swap this file for the project's own image; the
+       browse view crops it to a circle, so keep the subject centred. -->
+  <rect width="800" height="800" fill="#E5D2A8"/>
+  <g fill="#5a4423" opacity="0.86">
+    <path d="M180 646V300a60 60 0 0 1 120 0v346Z"/>
+    <path d="M340 646V300a60 60 0 0 1 120 0v346Z"/>
+    <path d="M500 646V300a60 60 0 0 1 120 0v346Z"/>
+  </g>
+  <rect x="140" y="660" width="520" height="10" fill="#c8743a"/>
+  <circle cx="400" cy="196" r="26" fill="#c8743a"/>
+</svg>

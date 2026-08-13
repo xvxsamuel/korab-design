@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
 const DOT_SIZE = 8;
+// Box the dot grows into while it wears the scissors, over a flower.
+const SCISSORS_SIZE = 34;
 const LERP_DOT  = 0.6;
 const LERP_PILL = 0.22;
+// Morph speed of the dot ↔ scissors hand-over.
+const LERP_SCISSORS = 0.25;
 
 function lerpColor(a: [number,number,number], b: [number,number,number], t: number): string {
   const r = Math.round(a[0] + (b[0] - a[0]) * t);
@@ -58,6 +62,7 @@ function preBlend(
 
 export default function Cursor() {
   const ref = useRef<HTMLDivElement>(null);
+  const scissorsRef = useRef<SVGSVGElement>(null);
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
@@ -92,6 +97,11 @@ export default function Cursor() {
     let cr = DOT_SIZE / 2;
     let ct = 0;
     let lastZ = 0;
+    // Scissors morph progress — 0 is the plain dot, 1 the scissors over a
+    // flower. Target flips on pointerover; the displayed value lerps.
+    let scTarget = 0;
+    let sc = 0;
+    let lastScissorStyle = '';
 
     let raf = 0;
     let running = false;
@@ -151,10 +161,21 @@ export default function Cursor() {
     const tick = () => {
       // Keep pill target in sync with the hovered element as its size/position changes
       if ((pillKind === 'email' || pillKind === 'panel-close') && hoveredEmail) {
-        const r = hoveredEmail.getBoundingClientRect();
-        pillRect.x = r.left; pillRect.y = r.top;
-        pillRect.w = r.width; pillRect.h = r.height;
+        // A hovered element can be unmounted under the cursor (the panel's
+        // close button when the panel closes). A detached node's rect is all
+        // zeros, which sent the pill lerping into the top-left corner.
+        if (!hoveredEmail.isConnected) {
+          pillActive = false;
+          pillKind = null;
+          hoveredEmail = null;
+        } else {
+          const r = hoveredEmail.getBoundingClientRect();
+          pillRect.x = r.left; pillRect.y = r.top;
+          pillRect.w = r.width; pillRect.h = r.height;
+        }
       }
+
+      sc += (scTarget - sc) * LERP_SCISSORS;
 
       let tx: number, ty: number, tw: number, th: number, tr: number, tt: number;
       let speed: number;
@@ -164,9 +185,13 @@ export default function Cursor() {
         tr = th / 2; tt = 1;
         speed = LERP_PILL;
       } else {
-        tx = mx - DOT_SIZE / 2; ty = my - DOT_SIZE / 2;
-        tw = DOT_SIZE; th = DOT_SIZE;
-        tr = DOT_SIZE / 2; tt = 0;
+        // Over a flower the dot swells into the scissors' box; the same
+        // width/height/radius lerp that makes the pill morph carries this
+        // one, so the hand-over is one continuous shape change.
+        const size = DOT_SIZE + (SCISSORS_SIZE - DOT_SIZE) * sc;
+        tx = mx - size / 2; ty = my - size / 2;
+        tw = size; th = size;
+        tr = size / 2; tt = 0;
         speed = LERP_DOT;
       }
 
@@ -200,10 +225,15 @@ export default function Cursor() {
         // (specifically the sun/orbit/star graphics at z-index 1-2 — they
         // would otherwise show through a difference-blended pill). Dot mode
         // keeps the pre-blended palette + difference so the small dot stays
-        // legible over text.
-        const blend: 'normal' | 'difference' = pillActive ? 'normal' : 'difference';
-        const a = pillActive ? INK_REAL : INK;
-        const b = pillActive ? ACCENT_REAL : ACCENT;
+        // legible over text. Scissors mode also blends normal — the icon
+        // would go psychedelic under difference. The switch sits at the very
+        // bottom of the morph, where the dot is back to size and nearly
+        // refilled, so neither direction shows a visible mode change.
+        const scissors = !pillActive && sc > 0.02;
+        const blend: 'normal' | 'difference' =
+          pillActive || (scissors && sc > 0.05) ? 'normal' : 'difference';
+        const a = blend === 'normal' ? INK_REAL : INK;
+        const b = blend === 'normal' ? ACCENT_REAL : ACCENT;
         // lerpColor cache — when (a, b, t) repeat across frames the rounded
         // RGB tuple is identical, so reuse the prior string. Hits during the
         // tail of a morph where ct has stabilized but the loop is still
@@ -215,10 +245,42 @@ export default function Cursor() {
           bgNext = lerpColor(a, b, ct);
           lerpA = a; lerpB = b; lerpT = ct; lerpResult = bgNext;
         }
+        // The disc empties as the scissors arrive: same circle, its fill
+        // handing over to the icon. The fill is gone by sc=0.3 — emptying
+        // early on the way in, and refilling only once the circle is nearly
+        // dot-sized again on the way out. A linear (1 − sc) here made the
+        // return stutter: the fill came back while the box was still ~12px,
+        // which flashed as a briefly fatter dot.
+        if (scissors) {
+          const fill = Math.max(0, Math.min(1, (0.3 - sc) / 0.3));
+          bgNext = bgNext.replace('rgb(', 'rgba(').replace(')', `, ${fill.toFixed(3)})`);
+        }
         if (bgNext !== lastBg) { s.background = bgNext; lastBg = bgNext; }
         if (blend !== lastBlend) {
           s.mixBlendMode = blend;
           lastBlend = blend;
+        }
+
+        // Scissors icon — swings in to rest at a working tilt, folds away on
+        // unhover along the same path.
+        const scEl = scissorsRef.current;
+        if (scEl) {
+          const scNext = sc < 0.02
+            ? 'op:0'
+            : `${sc.toFixed(3)}|${INK_REAL.join(',')}`;
+          if (scNext !== lastScissorStyle) {
+            lastScissorStyle = scNext;
+            if (sc < 0.02) {
+              scEl.style.opacity = '0';
+            } else {
+              scEl.style.opacity = String(Math.min(1, sc * 1.4));
+              // Rests at -38° — blades up-left toward the stem it cuts —
+              // arriving from a further -35° underswing.
+              scEl.style.transform =
+                `scale(${(0.35 + 0.65 * sc).toFixed(3)}) rotate(${(-38 - (1 - sc) * 35).toFixed(1)}deg)`;
+              scEl.style.color = `rgb(${INK_REAL[0]},${INK_REAL[1]},${INK_REAL[2]})`;
+            }
+          }
         }
 
         // email pill: z-index 5 so it sits above the sun (z-index 1-2) but below
@@ -240,7 +302,7 @@ export default function Cursor() {
       const settled =
         Math.abs(tx - cx) < 0.05 && Math.abs(ty - cy) < 0.05 &&
         Math.abs(tw - cw) < 0.05 && Math.abs(th - ch) < 0.05 &&
-        Math.abs(tt - ct) < 0.005;
+        Math.abs(tt - ct) < 0.005 && Math.abs(scTarget - sc) < 0.005;
 
       if (!settled) {
         raf = requestAnimationFrame(tick);
@@ -265,6 +327,10 @@ export default function Cursor() {
     const onOver = (e: PointerEvent) => {
       const el = (e.target as Element | null);
       refreshPaletteFor(el);
+
+      // Over a flower's cut zone the dot becomes the scissors.
+      scTarget = el?.closest('.bg-flower-hit') ? 1 : 0;
+
       // Resolve the closest interactive container in a single tree walk so we
       // don't run three separate .closest() calls per pointerover.
       const hit = el?.closest<HTMLElement>(
@@ -339,5 +405,28 @@ export default function Cursor() {
 
   if (!enabled) return null;
 
-  return <div ref={ref} className="cursor" aria-hidden="true" />;
+  return (
+    <div ref={ref} className="cursor" aria-hidden="true">
+      {/* Lucide "scissors" (ISC). Stroke-based; 2.4 width keeps the blades
+          present at cursor size. The per-frame rotation rests it at a
+          working diagonal. */}
+      <svg
+        ref={scissorsRef}
+        className="cursor-scissors"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="6" cy="6" r="3" />
+        <path d="M8.12 8.12 12 12" />
+        <path d="M20 4 8.12 15.88" />
+        <circle cx="6" cy="18" r="3" />
+        <path d="M14.8 14.8 20 20" />
+      </svg>
+    </div>
+  );
 }

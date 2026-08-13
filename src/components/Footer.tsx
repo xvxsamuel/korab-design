@@ -104,9 +104,16 @@ export default function Footer() {
       timer = setTimeout(update, 180);
     };
     window.addEventListener('resize', onResize);
+    // Also re-slot when the footer ITSELF changes size — a window-resize
+    // listener alone left a trap: if the one-shot update() ran while the
+    // footer measured zero (mid-reflow, mid-HMR), computeSlots returned []
+    // and the bed stayed empty until a window resize happened to fire.
+    const ro = new ResizeObserver(onResize);
+    if (ref.current) ro.observe(ref.current);
     return () => {
       clearTimeout(timer);
       window.removeEventListener('resize', onResize);
+      ro.disconnect();
     };
   }, []);
 

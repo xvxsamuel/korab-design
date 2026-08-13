@@ -1,14 +1,17 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Star from '../assets/star.svg?react';
 import StarFlat from '../assets/starflat.svg?react';
 import Cogs from './Cogs';
 
 type Project = {
-  n: string;
+  id: string;
   name: string;
   role: string;
   tags: string;
   year: string;
+  /** Browse-view artwork. Cropped to a circle, so keep the subject centred. */
+  image: string;
   bg: string;
   ink: string;
   accent: string;
@@ -18,11 +21,12 @@ type Project = {
 
 const projects: Project[] = [
   {
-    n: '01',
+    id: 'korabova-lovich',
     name: 'Korabova & Lovich',
     role: 'Law Firm',
     tags: 'UX Research · Brand Identity · Web',
     year: '2026',
+    image: '/works/korabova-lovich.svg',
     bg: '#E5D2A8',
     ink: '#5a4423',
     accent: '#c8743a',
@@ -32,11 +36,12 @@ const projects: Project[] = [
       'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.',
   },
   {
-    n: '02',
+    id: 'aram-pig',
     name: 'ARAM PIG',
     role: 'Data Analytics Website',
     tags: 'Data Science · Development · Gaming · Web',
     year: '2026',
+    image: '/works/aram-pig.svg',
     bg: '#C8D8C9',
     ink: '#2e4332',
     accent: '#c8a040',
@@ -46,11 +51,12 @@ const projects: Project[] = [
       'Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida.',
   },
   {
-    n: '03',
+    id: 'veracity',
     name: 'Veracity',
     role: 'AI Startup',
     tags: 'Product Design · Brand Identity · Web Extension',
     year: '2026',
+    image: '/works/veracity.svg',
     bg: '#D9CCDD',
     ink: '#4a3858',
     accent: '#a86496',
@@ -60,11 +66,12 @@ const projects: Project[] = [
       'Pellentesque in ipsum id orci porta dapibus. Vestibulum ac diam sit amet quam vehicula elementum sed sit amet dui. Donec sollicitudin molestie malesuada. Praesent sapien massa, convallis a pellentesque nec, egestas non nisi.',
   },
   {
-    n: '04',
+    id: 'omas-pantry',
     name: "Oma's Pantry",
     role: 'Online Store',
     tags: 'UX Research · Web · Ecommerce',
     year: '2025',
+    image: '/works/omas-pantry.svg',
     bg: '#E8C2A1',
     ink: '#5a3019',
     accent: '#b85a26',
@@ -87,8 +94,13 @@ export default function Works() {
   const [outgoing, setOutgoing] = useState<Project | null>(null);
   const [cycleDir, setCycleDir] = useState<'next' | 'prev' | null>(null);
   const triggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const cardRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const lastTriggerRef = useRef<string | null>(null);
   const prevOpenRef = useRef<string | null>(null);
+  // Page scroll at the moment the panel opened, restored on close.
+  const lockedScrollRef = useRef(0);
+
+  const isOpen = open !== null;
 
   useEffect(() => {
     const prevOpen = prevOpenRef.current;
@@ -96,8 +108,8 @@ export default function Works() {
 
     if (open && prevOpen && open !== prevOpen) {
       // Cycling between two open projects — push old layer out, slide new in.
-      const oldIdx = projects.findIndex((p) => p.n === prevOpen);
-      const newIdx = projects.findIndex((p) => p.n === open);
+      const oldIdx = projects.findIndex((p) => p.id === prevOpen);
+      const newIdx = projects.findIndex((p) => p.id === open);
       const oldProject = projects[oldIdx] ?? null;
       const newProject = projects[newIdx] ?? null;
       if (oldProject) setOutgoing(oldProject);
@@ -113,7 +125,7 @@ export default function Works() {
 
     if (open) {
       // Opening from closed.
-      const project = projects.find((p) => p.n === open) ?? null;
+      const project = projects.find((p) => p.id === open) ?? null;
       setDisplayed(project);
       setOutgoing(null);
       setCycleDir(null);
@@ -132,15 +144,30 @@ export default function Works() {
     setOpen(null);
     const last = lastTriggerRef.current;
     if (last) {
-      // Restore focus to the trigger after state flush.
-      requestAnimationFrame(() => triggerRefs.current[last]?.focus());
+      // Restore focus to the trigger after state flush. preventScroll matters:
+      // the default focus behaviour scrolls the element into view, and the
+      // orbit bodies are fixed-position, so the browser's idea of "into view"
+      // is their layout origin — which yanked the page to the top of the
+      // document on every close.
+      requestAnimationFrame(() => {
+        const orbitBody = triggerRefs.current[last];
+        if (orbitBody?.offsetParent) orbitBody.focus({ preventScroll: true });
+        else cardRefs.current[last]?.focus({ preventScroll: true });
+      });
     }
   };
 
+  // The panel is an overlay: the page underneath freezes exactly where it was
+  // and is put back byte-for-byte on close, so the orrery resumes mid-stride
+  // instead of re-deriving itself from a moved scroll position. Keyed on
+  // isOpen, not open — cycling between projects must not unlock and relock.
   useEffect(() => {
-    if (!open) return;
-    // Lock <html> scroll (CSS reserves the gutter via scrollbar-gutter so the
-    // page doesn't shift when the styled scrollbar disappears).
+    if (!isOpen) return;
+    // Capture before the lock: some engines clamp documentElement.scrollTop to
+    // 0 the moment overflow goes hidden, so reading it afterwards is too late.
+    lockedScrollRef.current = window.scrollY;
+    // (CSS reserves the gutter via scrollbar-gutter so the page doesn't shift
+    // when the styled scrollbar disappears.)
     document.documentElement.classList.add('lock-scroll');
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
@@ -150,49 +177,14 @@ export default function Works() {
     window.addEventListener('works:close', onExternalClose);
     return () => {
       document.documentElement.classList.remove('lock-scroll');
+      // Instant, not smooth — a smooth restore would animate the orrery
+      // through every intermediate scroll position on the way back.
+      window.scrollTo(0, lockedScrollRef.current);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('works:close', onExternalClose);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  // While the panel is open, route wheel scroll into project navigation:
-  // accumulating ~ACCUM_THRESHOLD of deltaY advances to the next project,
-  // and scrolling past the last/first project closes the panel.
-  useEffect(() => {
-    if (!open) return;
-
-    const ACCUM_THRESHOLD = 140;
-    const COOLDOWN_MS = 280;
-    let accumulated = 0;
-    let lastAction = Date.now();
-
-    const onWheel = (e: WheelEvent) => {
-      const now = Date.now();
-      if (now - lastAction < COOLDOWN_MS) {
-        accumulated = 0;
-        return;
-      }
-      accumulated += e.deltaY;
-      if (Math.abs(accumulated) < ACCUM_THRESHOLD) return;
-
-      const direction = accumulated > 0 ? 1 : -1;
-      accumulated = 0;
-      lastAction = now;
-
-      const idx = projects.findIndex((p) => p.n === open);
-      const nextIdx = idx + direction;
-      if (nextIdx < 0 || nextIdx >= projects.length) {
-        close();
-      } else {
-        setOpen(projects[nextIdx].n);
-      }
-    };
-
-    window.addEventListener('wheel', onWheel, { passive: true });
-    return () => window.removeEventListener('wheel', onWheel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [isOpen]);
 
   // Push the open project's palette onto the nav (only). Track `open`, not
   // `displayed`, so the nav resets instantly when closing — the panel keeps
@@ -200,7 +192,7 @@ export default function Works() {
   useEffect(() => {
     const nav = document.querySelector<HTMLElement>('.nav');
     if (!nav) return;
-    const current = open ? projects.find((p) => p.n === open) : null;
+    const current = open ? projects.find((p) => p.id === open) : null;
     if (current) {
       nav.style.setProperty('--bg', current.bg);
       nav.style.setProperty('--ink', current.ink);
@@ -213,19 +205,18 @@ export default function Works() {
     window.dispatchEvent(new Event('palette-change'));
   }, [open]);
 
-  const toggle = (n: string) => setOpen((cur) => (cur === n ? null : n));
+  const toggle = (id: string) => setOpen((cur) => (cur === id ? null : id));
 
-  const isOpen = open !== null;
   const project = displayed;
   // Palette source must update in the same render as `open` changes so the
   // .work-portal's --ink/--accent are present before the cursor's pointerover
   // handler reads them. Using `displayed` alone would lag by one render
   // (it's set in a useEffect), letting the cursor cache root-default colors.
-  const paletteProject = (open ? projects.find((p) => p.n === open) : null) ?? displayed;
+  const paletteProject = (open ? projects.find((p) => p.id === open) : null) ?? displayed;
 
   const renderLayer = (p: Project, status: 'leaving' | 'current') => (
     <div
-      key={`${status}-${p.n}`}
+      key={`${status}-${p.id}`}
       className={`work-panel-layer work-panel-layer-${status}${cycleDir ? ` cycle-${cycleDir}` : ''}`}
       style={
         {
@@ -239,7 +230,6 @@ export default function Works() {
       <div className="work-panel-inner">
         <div className="work-panel-content">
           <div className="work-panel-text">
-            <span className="work-panel-num">{p.n}</span>
             <h3 className="work-panel-title">{p.name}</h3>
             <p className="work-panel-blurb">{p.blurb}</p>
             <p className="work-panel-body">{p.body}</p>
@@ -259,11 +249,9 @@ export default function Works() {
             </dl>
             <Cogs />
           </div>
-          <div className="work-panel-images">
-            <div className="work-image-placeholder wide" />
-            <div className="work-image-placeholder" />
-            <div className="work-image-placeholder tall" />
-          </div>
+          <figure className="work-panel-media">
+            <img src={p.image} alt="" loading="lazy" decoding="async" />
+          </figure>
         </div>
       </div>
     </div>
@@ -271,41 +259,96 @@ export default function Works() {
 
   return (
     <section id="works" className="works">
-      <h2 className="section-title">Works</h2>
-      <ul className="works-list">
-        {projects.map((p, idx) => {
-          const rowOpen = open === p.n;
-          return (
-            <Fragment key={p.n}>
-              <li className={`work-row-wrap${rowOpen ? ' is-open' : ''}`}>
-                <button
-                  type="button"
-                  ref={(el) => {
-                    triggerRefs.current[p.n] = el;
-                  }}
-                  className="work-row"
-                  onClick={() => toggle(p.n)}
-                  aria-expanded={rowOpen}
-                  aria-controls={PANEL_ID}
-                  aria-haspopup="dialog"
-                >
-                  <span className="work-main">
-                    <span className="num">
-                      <span className="num-text">{p.n}</span>
-                      <StarFlat className="num-star" aria-hidden="true" />
-                    </span>
-                    <span className="title">
-                      {p.name} <span className="role">— {p.role}</span>
-                    </span>
-                    <span className="tags">{p.tags}</span>
-                  </span>
-                  <span className="year">{p.year}</span>
-                </button>
-              </li>
-              {idx < projects.length - 1 && <li className="rule-row" aria-hidden="true" />}
-            </Fragment>
-          );
-        })}
+      {/* Scroll runway for the orbit below. The runway sets how much scroll
+          the crossing gets; the pin wrapper inside it sets how long the title
+          holds. They're deliberately different lengths: the title lets go
+          well before the runway ends, so it is already scrolling away while
+          the stars are still crossing — they never have to share the top of
+          the frame with it. */}
+      <div className="works-runway">
+        <div className="works-pin">
+          <div className="works-stage">
+            <h2 className="section-title">Works</h2>
+          </div>
+        </div>
+      </div>
+
+      {/* Bodies riding the works orbit. Fixed to the viewport so they share a
+          coordinate space with the sun; useSunAnimation writes their
+          transforms in the same frame it moves the sun, so they never lag
+          behind the ring they sit on. Hidden on small/touch screens, where
+          .works-grid takes over. */}
+      <div className="works-orbit">
+        {projects.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            ref={(el) => {
+              triggerRefs.current[p.id] = el;
+            }}
+            className={`work-body${open === p.id ? ' is-open' : ''}`}
+            onClick={() => toggle(p.id)}
+            aria-expanded={open === p.id}
+            aria-controls={PANEL_ID}
+            aria-haspopup="dialog"
+            // Ambient star until the morph — useSunAnimation flips this (and
+            // pointer events, via .is-live) once the body has become a work.
+            tabIndex={-1}
+          >
+            {/* Two faces of one body. Until the works section it wears the
+                ornate cut-out mark — the second star's own face — then the
+                scroll bloom burns in the solid waymark mark with the project
+                cut into a circle inside it, the points reading as a star
+                around the image. */}
+            <span className="work-body-mark">
+              {/* The gear wrapper is what the hover turns — both star faces,
+                  never the image. The disc sits outside it so the project
+                  stays upright through every rotation source. */}
+              <span className="work-body-gear" aria-hidden="true">
+                <Star className="work-body-holey" aria-hidden="true" />
+                <StarFlat className="work-body-star" aria-hidden="true" />
+              </span>
+              <span className="work-body-disc">
+                {/* Eager: the bodies are fixed-position, so a lazy loader has
+                    no reliable "scrolled into view" moment to hook onto. */}
+                <img src={p.image} alt="" decoding="async" />
+              </span>
+            </span>
+            <span className="work-body-label">
+              <span className="work-body-name">{p.name}</span>
+              <span className="work-body-year">{p.year}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Small-screen / touch fallback: the orbit needs a wide viewport and a
+          pointer, so below the breakpoint the same projects list out flat. */}
+      <ul className="works-grid">
+        {projects.map((p) => (
+          <li key={p.id}>
+            <button
+              type="button"
+              ref={(el) => {
+                cardRefs.current[p.id] = el;
+              }}
+              className="work-card"
+              onClick={() => toggle(p.id)}
+              aria-expanded={open === p.id}
+              aria-controls={PANEL_ID}
+              aria-haspopup="dialog"
+            >
+              <span className="work-card-mark">
+                <StarFlat className="work-card-star" aria-hidden="true" />
+                <span className="work-card-disc">
+                  <img src={p.image} alt="" loading="lazy" decoding="async" />
+                </span>
+              </span>
+              <span className="work-card-name">{p.name}</span>
+              <span className="work-card-year">{p.year}</span>
+            </button>
+          </li>
+        ))}
       </ul>
 
       {createPortal(
@@ -367,13 +410,13 @@ export default function Works() {
             aria-label="Project navigation"
           >
             {projects.map((p) => (
-              <li key={p.n}>
+              <li key={p.id}>
                 <button
                   type="button"
-                  className={`work-portal-dot${p.n === open ? ' is-active' : ''}`}
-                  onClick={() => setOpen(p.n)}
+                  className={`work-portal-dot${p.id === open ? ' is-active' : ''}`}
+                  onClick={() => setOpen(p.id)}
                   aria-label={`View ${p.name}`}
-                  aria-current={p.n === open ? 'true' : undefined}
+                  aria-current={p.id === open ? 'true' : undefined}
                   tabIndex={isOpen ? 0 : -1}
                 >
                   <span className="work-portal-dot-mark" />

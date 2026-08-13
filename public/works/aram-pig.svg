@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
+  <!-- Placeholder artwork. Swap this file for the project's own image; the
+       browse view crops it to a circle, so keep the subject centred. -->
+  <rect width="800" height="800" fill="#C8D8C9"/>
+  <g fill="#2e4332" opacity="0.82">
+    <rect x="175" y="500" width="34" height="140" rx="17"/>
+    <rect x="227" y="410" width="34" height="230" rx="17"/>
+    <rect x="279" y="460" width="34" height="180" rx="17"/>
+    <rect x="331" y="320" width="34" height="320" rx="17"/>
+    <rect x="383" y="380" width="34" height="260" rx="17"/>
+    <rect x="435" y="240" width="34" height="400" rx="17"/>
+    <rect x="487" y="320" width="34" height="320" rx="17"/>
+    <rect x="539" y="190" width="34" height="450" rx="17"/>
+    <rect x="591" y="280" width="34" height="360" rx="17"/>
+  </g>
+  <polyline
+    points="192,500 244,410 296,460 348,320 400,380 452,240 504,320 556,190 608,280"
+    fill="none" stroke="#c8a040" stroke-width="9"
+    stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="556" cy="190" r="20" fill="#c8a040"/>
+</svg>
