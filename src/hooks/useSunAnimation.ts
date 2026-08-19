@@ -9,7 +9,7 @@ import { useLayoutEffect } from 'react';
 // title's bottom padding in CSS use the same grid so the composition reads as
 // laid out against an invisible 16-unit lattice rather than ad-hoc decimals.
 const SUN_START   = { x: 93.75, y: 68.75 };  // grid (15, 11)
-const SUN_CONTROL = { x: 50,    y: -18.75 }; // grid (8, -3)
+const SUN_CONTROL = { x: 50,    y: -43.75 }; // grid (8, -7)
 const SUN_END     = { x: 6.25,  y: 6.25 };   // grid (1, 1)
 
 // Kept for the end-position lookup elsewhere in this file.
@@ -17,10 +17,11 @@ const SUN_PATH = [SUN_START, SUN_END] as const;
 
 // Star A's angular rate multiplier. >1 means it completes its arc early
 // and waits off-screen right (still orbiting the sun, never decoupled)
-// until the sun's departure carries it back in to its landing. 1.2 is a
-// gentle head start — the tighter measured ring no longer crosses the
-// about header, so the old 3× escape-velocity rate isn't needed.
-const STAR_ARC_SCALE   = 1.2;
+// until the sun's departure carries it back in to its landing. 1.4 makes
+// the visible hero/about stretch read as real orbiting — roughly twice
+// the works axle's rate — and saturates the arc while the star is hidden
+// for the works stage, so no rate change is ever on screen.
+const STAR_ARC_SCALE   = 1.4;
 // Ring radii as a fraction of the placeholder-derived base distance.
 // Ring A's value is MEASURED, not aesthetic guesswork: the title's kerning
 // pulls "Korab" 0.6em left over the placeholder (tight lockup), so the
@@ -34,10 +35,13 @@ const RING_B_SCALE   = 0.66;
 // Height cap on ring B. The works bodies present at the ring's lowest point
 // (sunY + radius), and base scales with viewport WIDTH — so on wide screens
 // an uncapped ring pushes the works to the bottom edge (measured 81% of vh
-// at 1920×1080). Capping against height pins the presented row near 60% of
-// the screen at any aspect; on narrow/portrait viewports the width term is
-// the smaller one anyway, so phones are untouched.
-const RING_B_MAX_VH  = 0.5;
+// at 1920×1080). Capping against height pins the presented row at any
+// aspect; on narrow/portrait viewports the width term is the smaller one
+// anyway, so phones are untouched. 0.58 with the noon sun at ~3vh (see
+// SUN_CONTROL) lands the row at ~61% of the screen — the same row as the
+// old 0.5/12.5vh pair, but with a bigger inner ring and the sun higher, so
+// much more of the outer ring's sweep is in frame through the works stage.
+const RING_B_MAX_VH  = 0.58;
 // Extra angle (radians) added to the works train's start position on ring B.
 // Larger values rotate the lead body further upward from the mirrored-Y
 // baseline so it sits between the navbar and the title rather than down near
@@ -48,23 +52,25 @@ const WORK_START_OFFSET = Math.PI * 0.18;
 // Works orbit --------------------------------------------------------------
 // The whole works animation is two small ideas:
 //
-//  1. ONE ANGLE. The train's head angle makes exactly one full revolution
-//     per page, as three straight lines: hero pose → assembled (approach),
-//     assembled → 150° (the stage — the slow stretch where each work is
-//     carried through the presented point in turn), 150° → hero pose + 2π
-//     (the return, whose upper arc is above the viewport). Bodies sit at
-//     fixed offsets from the head. The lead body's hero angle is star B's
-//     old start, computed from the same placeholder geometry.
+//  1. ONE ANGLE, ONE RATE. The train's head angle makes exactly one full
+//     revolution per page at a single constant rate: hero pose → hero pose
+//     + 2π (the night slot), the very end rounded by smoothDock. Bodies
+//     sit at fixed offsets from the head. The lead body's hero angle is
+//     star B's old start, computed from the same placeholder geometry.
+//     Where the presentations fall is a consequence of the rate, and the
+//     works section's runway height in style.css is what aligns the
+//     pinned title with them.
 //
 //  2. ONE MEASURE. A body's angular distance from the presented point (90°,
 //     beneath the sun) drives everything visual: morph openness, menu
 //     focus, label opacity. Symmetric in, symmetric out; no timers, no
 //     fades, no special cases.
 //
-// The sun rises to noon (bezier midpoint = 50vw/12.5vh) as the train
-// assembles, holds there through the stage plus a dwell, then finishes its
-// arc to the contact parking. All zone boundaries derive from measured
-// section positions, so layout changes re-anchor the whole thing.
+// The sun rises to noon (bezier midpoint = 50vw / ~3vh) before the title
+// pins, holds there until the last body folds plus a dwell, then finishes
+// its arc to the contact parking. The pin and backstop derive from
+// measured section positions; the rotation itself derives from nothing
+// but its two end poses.
 const RAD = Math.PI / 180;
 // The train's head-to-tail angular span — its min and max positions on the
 // ring. However many projects there are, they divide this span evenly, so
@@ -72,21 +78,14 @@ const RAD = Math.PI / 180;
 // train; the per-neighbour step is derived in the hook from the body count.
 const WORK_SPAN = 126 * RAD;
 // Morph windows. The morph is a plain cross-fade + scale driven by --in — no
-// filters. Each body opens over BLOOM_LEN of scroll progress as it enters the
-// works stage; the trailing body (index 3) enters the visible arc first, so
-// the stagger runs 3→0.
-// The open threshold itself is derived in init() from the works section's
-// measured position — hardcoding it as a progress fraction silently broke
-// every time a section's padding changed. Only the window's shape is fixed:
-const BLOOM_LEN = 0.055;
-// The introductions wait for the camera — opens begin only once the title
-// has settled — but that is time's ONLY job here. The one-after-another
-// sequencing is purely angular: bodies sit 42° apart on the axle, so they
-// reach the presented point in order by construction. (There used to be
-// per-body time slots too; they drifted behind the geometry every time the
-// schedule changed, until bodies were opening 60° past centre.)
-const BLOOM_LAG_P = 0.01;
-// And the morph runs backwards on the way out, so a body leaves the stage the
+// filters, and NO time gate: openness is purely a function of a body's
+// angle. The one-after-another sequencing is the axle's own 42° spacing —
+// bodies reach the presented point in order by construction. (There used to
+// be per-body time slots, then a single camera gate; both fought the
+// geometry — the slots drifted behind schedule changes, and the gate popped
+// every body already inside the enter window open at once the moment it
+// lifted.)
+// The morph runs backwards on the way out, so a body leaves the stage the
 // way it arrived — a small ornate star, no image, no label:
 //  · position-driven — a body folds shut as its centre crosses the left band
 //    of the viewport (fractions of vw so phones keep a usable stage width);
@@ -102,89 +101,85 @@ const BLOOM_LAG_P = 0.01;
 // whole thing is expressed in ring-space degrees — viewport size only enters
 // through the sun and ring geometry, which already scale.
 const PRESENT_POINT = 90 * RAD;
-// The open/fold ramps are ASYMMETRIC on purpose. Approach side: a long,
-// gradual unfurl — a body starts opening 80° out (practically as it enters
-// the sky) and is full 35° before the point, so the growth is part of the
-// approach instead of a pop at centre. Exit side: tighter — fully folded by
-// 55° past, safely before the title zone (~158°).
-const ENTER_EDGE = 80 * RAD;
-const ENTER_RAMP = 45 * RAD;
+// The open/fold ramps are ASYMMETRIC on purpose. Approach side: a body
+// starts opening 40° out and is full 10° before the point. Under the
+// constant axle rate this window is what times the unfurl against the
+// page: the lead body crosses its enter edge at ~17% of the animation —
+// the same beat the sun locks onto noon — so nothing blooms over the
+// about section, and each next body's unfurl begins right as the previous
+// presentation peaks. Exit side: tighter — fully folded by 55° past,
+// safely before the title zone (~158°).
+const ENTER_EDGE = 40 * RAD;
+const ENTER_RAMP = 30 * RAD;
 const EXIT_EDGE = 55 * RAD;
 const EXIT_RAMP = 20 * RAD;
 // The menu highlight is the same measure with a tighter window.
 const FOCUS_HALF = 44 * RAD;
 // The axle completes exactly ONE FULL REVOLUTION per page: from the hero
-// pose, through the assembly and the presentations, on around the top of
-// the sun (the upper semicircle sits above the viewport at noon, so the
-// return pass is off-screen), ending back at its starting pose — which, at
-// the parked sun, tucks every body just off the contact page's edges. Each
-// body folds symmetrically after presenting and simply keeps riding; the
-// works screen itself stays locked, the axle is the only thing that turns.
-// The sun still waits this dwell after the last presentation before it
-// departs for the parking spot.
+// pose, through the presentations, on around the top of the sun (the
+// upper semicircle sits above the viewport at noon, so the return pass is
+// off-screen), ending back at its starting pose — which, at the parked
+// sun, tucks every body just off the contact page's edges. Each body
+// folds symmetrically after presenting and simply keeps riding; during
+// the locked stage the axle is the only thing that turns.
+// The sun waits this dwell after the last body folds before it departs
+// for the parking spot.
 const WORK_EXIT_DWELL_P = 0.02;
-// Star A's rate multiplier saturates its arc well before the page ends.
-// The last stretch of its sweep is held back and paid out CONTINUOUSLY
-// from the moment the arc saturates — so the big star never parks
-// mid-page and rides in from off-screen right, on the scrollbar like
-// everything else. Sized generously: this whole angle IS its ending
-// animation.
-const STARA_GLIDE_GAP = 28 * RAD;
-// Where the big axis finishes that ride-in. Ring A is tied to nothing but
-// the hero pose, so its ending is free to detune from the works axle: the
-// big star reaches its night angle here and rests on the ring (still
-// carried down-screen by the descending sun), while the works' night star
-// keeps sweeping until the very bottom. The two lights arrive one after
-// the other instead of on the same beat — entries offset, endings offset,
-// both entirely scroll-driven.
-const STARA_LAND_P = 0.94;
+// The finale has TWO scroll measures. `p` is the sun's: 0 at the top,
+// 1 the instant the sun parks beside the email — the sun finishes exactly
+// with its scroll, nothing is held back from its descent. `q` is the
+// ending runway's: the extra --ending-runway of scroll beneath the sticky
+// final frame (see .ending in style.css), 0 where the sun parks and 1 at
+// the document bottom. The frame is glued to the viewport through all of
+// q, so the ONLY things moving in the runway are the orbits:
+//   · the works axle keeps its one constant rate straight through the
+//     sun's landing and docks in the night slot at q = AXLE_DOCK_Q;
+//   · star A waits parked STARA_GLIDE_GAP short of its slot (off the top
+//     of the frame) and slides in last, over [STARA_CODA_Q, 1], ease-out.
+// The runway's length (CSS) sets how slowly all of that plays.
+const STARA_GLIDE_GAP = 18 * RAD;
+const AXLE_DOCK_Q = 0.55;
+const STARA_CODA_Q = 0.45;
+// Nothing LOCKS into place: every arrival decelerates to zero angular
+// velocity at its rest pose instead of stopping mid-stride. Star A's
+// whole coda is ease-out; the axle keeps its constant rate but rounds
+// the final stretch of the ride with a slope-matched ease (identity
+// until the last DOCK_EASE_W of the normalized ride, then a cubic whose
+// entry slope is 1 and exit slope is 0 — the rate bends smoothly into
+// rest, no corner).
+const DOCK_EASE_W = 0.15;
+const easeOut3 = (t: number) => 1 - Math.pow(1 - t, 3);
+const smoothDock = (u: number) => {
+  if (u >= 1) return 1;
+  if (u < 1 - DOCK_EASE_W) return u;
+  const s = (u - (1 - DOCK_EASE_W)) / DOCK_EASE_W;
+  return (1 - DOCK_EASE_W) + DOCK_EASE_W * (s + s * s - s * s * s);
+};
 // The end-of-page backstop is derived in init() from the contact section's
 // measured position; only the ramp length is fixed. It outranks the
 // presented-point measure for one reason: the parked body ENDS at the
 // presented point, and it must end there folded.
 const WORK_CLOSE_LEN = 0.04;
-// The train's angular schedule is a piecewise-linear curve through four
-// layout-anchored knots, not a constant rate. Its old constant rate came
-// from a parking constraint inherited from star B (one full surplus lap to
-// land the last body beside the sun at p=1), and that lap is what kept
-// making the crossing fast and early: 374° had to fit into one page no
-// matter how the sections moved. The constraint is gone — the schedule now
-// serves the stage:
-//   phase          at p=0        — the hero trail, unchanged;
-//   tail at 120°   at the pin    — train assembled across the arc the
-//                                  moment the camera settles on the title;
-//   +CRAWL         by slow-end   — the introductions: slowest stretch on
-//                                  the page (~140°/p vs the old 374°);
-//   head at 90°    at p=1        — one small ornate star left hanging
-//                                  plumb beneath the parked sun at the
-//                                  email; the rest have set off-left.
-// The schedule's knots are all HEAD angles in ring space, so every zone is
-// "carry the train from this pose to that pose" — no rates, no laps, no
-// conservation, and each value reads directly against PRESENT_POINT:
-//   · at the pin, the tail sits 45° — on the approach side of the presented
-//     point, so the first presentation RISES after the camera settles
-//     instead of arriving pre-peaked;
-//   · by slow-end the head reaches 72° — meaning every body, head included,
-//     has swept into the presented window during the stage (the crawl span
-//     works out to span + 72 − 45); the runway's height in style.css is
-//     what spreads that sweep over enough scroll to breathe;
-//   · by p=1 the head hangs at 90°, folded, plumb beneath the parked sun.
-const WORK_TAIL_AT_PIN = 45 * RAD;
-// Where the head stands when the sun unlocks: far enough around that every
-// body has climbed into the off-screen arc above the viewport — the stage
-// ends with an empty sky, so nothing is mid-flight near the works title
-// when the page starts moving again. The whole locked stage is ONE
-// continuous scroll-driven sweep from assembly to here: presentations,
-// folds, and the climb-out are a single motion with no holds and no
-// speed-ups.
-const WORK_STAGE_EXIT_HEAD = 200 * RAD;
-// How far AHEAD of the pin the assembly completes, in scroll progress. The
-// camera should lock onto stars already in position, not catch the tail of
-// their approach (~285px of scroll at the reference size).
+// The train's angular schedule is ONE constant rate: hero pose at p=0 to
+// the night slot at canvasLandP, exactly one revolution, no zones and no
+// knots. The axle turns the same amount per unit of scroll everywhere on
+// the page — the speed NEVER changes, which is the orrery's whole feel.
+// Only three poses matter and all three are honoured by construction:
+//   · p=0 — the hero trail, unchanged;
+//   · the presentations — they fall wherever the constant rate puts them
+//     (~27/38/48/58% of the animation); the works RUNWAY HEIGHT in
+//     style.css is sized so the title pins just ahead of the first one.
+//     Aligning the works moment is a layout job now, not a schedule job;
+//   · at canvasLandP the tail body docks in the night sky beside the sun,
+//     the very end of the ride rounded off by smoothDock.
+// How far AHEAD of the pin the sun's noon arrival completes: the camera
+// should lock onto a sun already at noon, not catch the tail of its rise.
 const WORK_SETTLE_LEAD_P = 0.06;
 // The sun's bezier parameter during the works stage — the curve's midpoint,
-// which sits at exactly 50vw / 12.5vh: noon. Held for the whole stage so the
-// presented point stays locked mid-screen while the works pass through it.
+// which sits at exactly 50vw and (start + 2·control + end)/4 = ~3.1vh:
+// noon, high in the sky so the outer ring's arc fills the frame. Held for
+// the whole stage so the presented point stays locked while the works pass
+// through it.
 const SUN_NOON = 0.5;
 // The backstop lands when the contact section's top is this far up from the
 // viewport bottom — everything must be shut before the contact content owns
@@ -337,15 +332,14 @@ export function useSunAnimation() {
     let ringRadiusB = 0;
     let startAngleA = 0;
     let endAngleA   = 0;
-    // Works train schedule state — knots computed in init() from the
-    // measured layout. workPhase keeps star B's old start construction;
-    // workEndHead is where the revolution finishes (night-sky slot).
+    // Works train endpoints, computed in init(). workPhase keeps star B's
+    // old start construction; workEndHead is where the revolution finishes
+    // (night-sky slot). workPinP / closeEndP / slowEndP are layout-derived:
+    // the pin times the sun's noon arrival, closeEndP backstops the folds,
+    // and slowEndP only clamps settleP on unusually short layouts.
     let workPhase   = 0;
     let workEndHead = 0;
     let workPinP    = 0.5;
-    // Morph thresholds and the slow zone's end, derived in init() from the
-    // measured section layout.
-    let bloomStartP = 0.5;
     let closeEndP   = 0.85;
     let slowEndP    = 0.8;
 
@@ -360,26 +354,42 @@ export function useSunAnimation() {
       last: '', spin: '', bloom: '', focus: '', live: false,
     }));
 
-    const apply = (p: number) => {
-      // The works stage window, shared by the train's schedule below and the
-      // sun's own schedule here. The glide (and the sun's departure) begin a
-      // dwell after the stage ends, once the released title has cleared.
+    const apply = (p: number, q: number) => {
+      // The sun's noon arrival, anchored ahead of the works pin.
       const settleP = Math.max(0.05, Math.min(workPinP - WORK_SETTLE_LEAD_P, slowEndP - 0.1));
-      const glideStartP = Math.min(0.93, slowEndP + WORK_EXIT_DWELL_P);
+      // The axle's constant ride spans the sun's whole scroll AND the first
+      // AXLE_DOCK_Q of the runway; in p-units the ride ends here (>1).
+      const rideSpan = workEndHead - workPhase;
+      const rideEndP = 1 + AXLE_DOCK_Q * runwayP;
+      // The sun unlocks ANGULARLY: the moment the axle's last body has
+      // folded past the exit edge (plus a small dwell), noon lets go and
+      // the descent begins. Derived by inverting the constant-rate ride.
+      const foldedHead = PRESENT_POINT + EXIT_EDGE + 5 * RAD;
+      const glideStartP = Math.min(
+        0.9,
+        Math.max(
+          settleP + 0.05,
+          rideEndP * ((foldedHead - workPhase) / Math.max(0.01, rideSpan))
+            + WORK_EXIT_DWELL_P,
+        ),
+      );
+      // The sun lands at p=1 — with its scroll, not before it.
+      const canvasLandP = 1;
 
       // Sun schedule: the bezier's midpoint (0.5) lands at exactly 50vw,
-      // 12.5vh — noon, centre-sky. The sun reaches it as the works assemble,
-      // HOLDS there through the presentations AND the exit dwell (locking
-      // the presented point mid-screen), then completes the remaining half
-      // of its arc down to the contact parking together with the formation's
-      // glide. The scroll damping rounds off the velocity corners.
+      // ~3vh — noon, high-sky. The sun reaches it before the title
+      // pins, HOLDS there through the presentations (locking the presented
+      // point mid-screen), then descends to the contact parking once the
+      // last body has folded. The scroll damping rounds off the velocity
+      // corners.
       let sunP: number;
       if (p <= settleP) {
         sunP = SUN_NOON * (p / settleP);
       } else if (p <= glideStartP) {
         sunP = SUN_NOON;
       } else {
-        sunP = SUN_NOON + (1 - SUN_NOON) * ((p - glideStartP) / Math.max(0.01, 1 - glideStartP));
+        sunP = SUN_NOON + (1 - SUN_NOON)
+          * clamp01((p - glideStartP) / Math.max(0.01, canvasLandP - glideStartP));
       }
       const { x, y } = sampleSun(sunP);
       const sunVX = (x / 100) * vw;
@@ -395,13 +405,14 @@ export function useSunAnimation() {
 
       const fracA = Math.min(p * STAR_ARC_SCALE, 1);
 
-      // Star A: moves downward along main ring. When its fast arc saturates
-      // (fracA hits 1 at p = 1/STAR_ARC_SCALE), the held-back gap takes over
-      // seamlessly and pays out linearly until STARA_LAND_P — one continuous
-      // scroll-scrubbed approach that settles a stretch before the works'
-      // night star does.
-      const satA = Math.min(STARA_LAND_P - 0.01, 1 / STAR_ARC_SCALE);
-      const tailT = clamp01((p - satA) / Math.max(0.01, STARA_LAND_P - satA));
+      // Star A: rides the main ring — with an extra full lap folded into
+      // its arc, so the visible hero/about stretch reads as real orbiting.
+      // The arc saturates mid-page, parked STARA_GLIDE_GAP short of its
+      // slot — off the top of the frame for the whole sun descent. In the
+      // ending runway, the ease-out coda pays the gap out last of all,
+      // decelerating into the slot so the page's final motion drifts to
+      // rest.
+      const tailT = easeOut3(clamp01((q - STARA_CODA_Q) / (1 - STARA_CODA_Q)));
       const angleA = lerp(startAngleA, endAngleA, fracA)
         + STARA_GLIDE_GAP * tailT;
       placeStar(starElA, sunVX + ringRadius  * Math.cos(angleA), sunVY + ringRadius  * Math.sin(angleA), starACache);
@@ -410,30 +421,15 @@ export function useSunAnimation() {
       // Placed here — not in a loop of their own — so a frame never paints
       // them at one ring position and the sun at another.
       //
-      // Piecewise-linear head angle through the pose knots. No conservation
-      // between segments — each zone has exactly the speed its job needs,
-      // and nothing is repaid anywhere visible.
-      //
-      // The assembly lands WORK_SETTLE_LEAD_P before the pin, not at it: the
-      // approach zone runs slightly faster and hands over to the crawl while
-      // the title is still arriving, so the camera locks onto a formation
-      // already standing (and already creeping — nothing on this page waits).
-      const assembled = WORK_TAIL_AT_PIN - WORK_SPAN;
-      let head: number;
-      if (p <= settleP) {
-        head = workPhase + (assembled - workPhase) * (p / settleP);
-      } else if (p <= glideStartP) {
-        // The locked stage: one continuous sweep — presentations, folds,
-        // climb-out — ending with the sky clear as the sun unlocks.
-        head = assembled + (WORK_STAGE_EXIT_HEAD - assembled)
-          * ((p - settleP) / Math.max(0.01, glideStartP - settleP));
-      } else {
-        // Unlocked: sun and axle travel together, scroll carrying the head
-        // the whole way into the night-sky slot at p=1. The damped progress
-        // rounds off the arrival.
-        const t3 = (p - glideStartP) / Math.max(0.01, 1 - glideStartP);
-        head = WORK_STAGE_EXIT_HEAD + (workEndHead - WORK_STAGE_EXIT_HEAD) * t3;
-      }
+      // ONE constant rate for the whole ride: hero pose → night slot, no
+      // zones, no knots — the works alignment comes from the LAYOUT (the
+      // runway height positions the pin just ahead of the first
+      // presentation). The ride runs straight through the sun's landing
+      // into the ending runway — the night star is still arriving on the
+      // stopped frame — and smoothDock bends its very end so the axle
+      // drifts to rest at AXLE_DOCK_Q instead of stopping mid-stride.
+      const rideT = (p + q * runwayP) / rideEndP;
+      const head = workPhase + rideSpan * smoothDock(Math.min(rideT, 1));
       for (let i = 0; i < workBodies.length; i++) {
         // Reversed offsets: index 0 rides furthest ahead, so the projects
         // present in ARRAY order (first project first) — the panel's
@@ -455,23 +451,21 @@ export function useSunAnimation() {
           cache.spin = spin;
         }
 
-        // Open on entry, close near either horizontal edge and past the stage
-        // — whichever says "most shut" wins, so the morph is a pure function
-        // of scroll position and scrubs cleanly in both directions. The edge
-        // term measures the nearer side rather than a fixed one, so it holds
-        // regardless of which way round the ring the train is travelling.
-        // One global gate ("the camera has settled") and the angular
-        // presented-point measure — nothing else. Each body opens as IT
-        // reaches the presented zone and folds as it leaves; arrival order
-        // is the axle's own spacing.
-        const stageGate = clamp01((p - bloomStartP) / BLOOM_LEN);
+        // Purely angular openness — a body unfurls as it approaches the
+        // presented point and folds as it leaves, wherever on the page that
+        // happens. No time gate: under the constant rate a gate anchored to
+        // the pin would catch bodies already inside the enter window and
+        // pop them open together the moment it lifted. The unfurl begins
+        // while a body is still riding in (largely off-screen right), which
+        // reads as the approach itself. The end backstop still forces
+        // everything shut for the parked night pose.
         const signed = a - PRESENT_POINT;
         const offPoint = Math.abs(signed);
         const openness = signed < 0
           ? clamp01((ENTER_EDGE + signed) / ENTER_RAMP)
           : clamp01((EXIT_EDGE - signed) / EXIT_RAMP);
         const endFall = clamp01((closeEndP - p) / WORK_CLOSE_LEN);
-        const bloom = Math.min(stageGate, openness, endFall);
+        const bloom = Math.min(openness, endFall);
 
         // Menu focus — the same presented-point measure with a tighter
         // window, gated by the morph so shut bodies never highlight. The
@@ -502,15 +496,27 @@ export function useSunAnimation() {
     };
 
     let cachedBaseMax = 0;
+    // The ending runway's scroll length, and the same expressed in p-units
+    // (runway px / sun px) so the axle's ride can span both measures.
+    let runwayPx = 0;
+    let runwayP = 0;
 
     const computeProgress = () => {
       if (cachedBaseMax <= 0) return 0;
       const eff = Math.max(0, Math.min(cachedBaseMax, window.scrollY));
       return eff / cachedBaseMax;
     };
+    const computeRunway = () => {
+      if (runwayPx <= 0) return 0;
+      return clamp01((window.scrollY - cachedBaseMax) / runwayPx);
+    };
 
     let displayedProgress = 0;
     let targetProgress = 0;
+    // The runway measure, damped with the same lerp so the coda scrubs as
+    // softly as everything else.
+    let displayedRunway = 0;
+    let targetRunway = 0;
     let rafId = 0;
     let innerRingRaf = 0;
     let running = false;
@@ -528,12 +534,19 @@ export function useSunAnimation() {
 
     const tick = () => {
       targetProgress = computeProgress();
+      targetRunway = computeRunway();
       const delta = targetProgress - displayedProgress;
-      const scrollDone = Math.abs(delta) < SETTLE_EPS;
-      if (!scrollDone) displayedProgress += delta * LERP;
-      else displayedProgress = targetProgress;
+      const deltaQ = targetRunway - displayedRunway;
+      const scrollDone = Math.abs(delta) < SETTLE_EPS && Math.abs(deltaQ) < SETTLE_EPS;
+      if (scrollDone) {
+        displayedProgress = targetProgress;
+        displayedRunway = targetRunway;
+      } else {
+        displayedProgress += delta * LERP;
+        displayedRunway += deltaQ * LERP;
+      }
 
-      apply(displayedProgress);
+      apply(displayedProgress, displayedRunway);
       if (scrollDone) {
         running = false;
         return;
@@ -543,11 +556,13 @@ export function useSunAnimation() {
 
     const reapply = () => {
       targetProgress = computeProgress();
+      targetRunway = computeRunway();
       startLoop();
     };
 
     const onScroll = () => {
       targetProgress = computeProgress();
+      targetRunway = computeRunway();
       startLoop();
     };
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -692,15 +707,46 @@ export function useSunAnimation() {
         contactEl;
       const totalScroll = document.documentElement.scrollHeight - vh;
 
-      if (targetEl) {
+      // Pin the ending frame's top so its bottom meets the viewport's: the
+      // frame's own height is the offset (measured, so footer/contact
+      // padding changes never desync it).
+      const frameEl = document.querySelector<HTMLElement>('.ending-frame');
+      const frameH = frameEl ? frameEl.offsetHeight : 0;
+      if (frameEl) {
+        frameEl.style.setProperty('--ending-frame-h', `${Math.round(frameH)}px`);
+      }
+
+      if (frameEl && frameH > 0) {
+        // The sun lands the instant the ending frame PINS — the scroll at
+        // which the frame's bottom first meets the viewport's bottom. Past
+        // that the frame is glued and the scroll that remains is the
+        // runway: orbits only. (Anchoring to the email's document position
+        // would be wrong here — while pinned, the email's position is
+        // constant, and the sun would spend the whole runway still
+        // descending toward a target that stopped moving.)
+        // Measure the frame's STATIC position via its (non-sticky) parent:
+        // a stuck sticky element reports its pinned, viewport-carried rect,
+        // which would place the pin at whatever scroll init() happened to
+        // run at — and zero the runway when that's the page bottom.
+        const endingEl = frameEl.parentElement ?? frameEl;
+        const frameTopDoc = endingEl.getBoundingClientRect().top + window.scrollY;
+        const pinScroll = frameTopDoc + frameH - vh;
+        cachedBaseMax = Math.min(totalScroll, Math.max(0, pinScroll));
+      } else if (targetEl) {
+        // No sticky frame (reduced layouts): anchor to the email as before.
         const tr = targetEl.getBoundingClientRect();
         const targetDocY = tr.top + window.scrollY + tr.height / 2;
         const sunEndYFrac = SUN_PATH[SUN_PATH.length - 1].y / 100;
-        const animEnd = Math.min(totalScroll, Math.max(0, targetDocY - vh * sunEndYFrac));
-        cachedBaseMax = animEnd;
+        cachedBaseMax = Math.min(totalScroll, Math.max(0, targetDocY - vh * sunEndYFrac));
       } else {
         cachedBaseMax = totalScroll;
       }
+      // Whatever scroll remains past the sun's landing is the ending
+      // runway — the sticky final frame stays glued while the orbits
+      // finish. (Measured, so the CSS --ending-runway is the single source
+      // of its length; zero when the layout has no runway.)
+      runwayPx = Math.max(0, totalScroll - cachedBaseMax);
+      runwayP = cachedBaseMax > 0 ? runwayPx / cachedBaseMax : 0;
 
       // Schedule knots, anchored to where the sections actually sit in the
       // document rather than to hand-tuned progress fractions — section
@@ -712,12 +758,11 @@ export function useSunAnimation() {
           const worksTopDoc = worksEl.getBoundingClientRect().top + window.scrollY;
           // The camera settles when the section top reaches the viewport top.
           workPinP = Math.max(0.05, Math.min(0.9, worksTopDoc / cachedBaseMax));
-          bloomStartP = workPinP + BLOOM_LAG_P;
         }
         if (contactEl) {
           const contactTopDoc = contactEl.getBoundingClientRect().top + window.scrollY;
           closeEndP = Math.max(0, (contactTopDoc - vh * CLOSE_LEAD_VH) / cachedBaseMax);
-          // Crawl until the contact section is a viewport away.
+          // Only clamps settleP on unusually short layouts.
           slowEndP = Math.min(
             0.95,
             Math.max(workPinP + 0.1, (contactTopDoc - vh * 0.9) / cachedBaseMax),
@@ -735,13 +780,15 @@ export function useSunAnimation() {
 
       // Star A lands in the upper-right — grid (9, 3.5), a half-grid Y step
       // off the row-3 anchor. The arc's end angle stops the held-back gap
-      // SHORT of the landing direction; apply() pays that gap out from the
-      // arc's saturation point to p=1, so the sum lands exactly on dirA.
+      // SHORT of the landing direction (apply()'s coda pays it out last),
+      // and carries ONE EXTRA FULL LAP in the travel direction — screen-
+      // identical at the ends, but the visible stretches actually orbit.
       const dirA = Math.atan2(vh * 0.21875 - sunEndVY, vw * 0.5625 - sunEndVX);
       endAngleA = (STAR_ARC_SCALE >= 1
         ? dirA
         : (dirA - (1 - STAR_ARC_SCALE) * startAngleA) / STAR_ARC_SCALE)
-        - STARA_GLIDE_GAP;
+        - STARA_GLIDE_GAP
+        - 2 * Math.PI;
       // The works revolution's final pose: the tail body parks visibly on
       // ring B toward grid (6, 3) from the parked sun — the third light of
       // the night sky, between the sun and star A. The head angle for that
@@ -760,13 +807,29 @@ export function useSunAnimation() {
       // lap is what forced the crossing to race the page, so it's gone.)
 
       const p = computeProgress();
+      const q = computeRunway();
       displayedProgress = p;
       targetProgress = p;
-      apply(p);
+      displayedRunway = q;
+      targetRunway = q;
+      apply(p, q);
       if (isResize) reapply();
     };
 
     init(false);
+
+    // Fonts and late-loading assets reflow the document after mount, and
+    // the schedule's scroll length (cachedBaseMax) plus every layout-derived
+    // threshold were measured against the pre-swap layout — leaving the
+    // night-sky landings a few degrees short of their slots until the next
+    // resize re-derived them. Re-init once the font swap settles and once
+    // more when the full load does.
+    let disposed = false;
+    const onLateLayout = () => {
+      if (!disposed) init(true);
+    };
+    window.addEventListener('load', onLateLayout, { once: true });
+    document.fonts?.ready.then(onLateLayout).catch(() => {});
 
     let resizeTimer: ReturnType<typeof setTimeout>;
     // Mobile browsers fire `resize` every time the URL bar slides away, which
@@ -785,10 +848,12 @@ export function useSunAnimation() {
     window.addEventListener('resize', onResize, { passive: true });
 
     return () => {
+      disposed = true;
       clearTimeout(resizeTimer);
       cancelAnimationFrame(rafId);
       cancelAnimationFrame(innerRingRaf);
       running = false;
+      window.removeEventListener('load', onLateLayout);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('scroll', onScroll);
       starElA.removeEventListener('animationend', onStarBloomEnd);

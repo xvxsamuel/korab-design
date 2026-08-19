@@ -667,18 +667,19 @@ section {
 
 /* Works -------------------------------------------------------------- */
 
-/* The section is a scroll runway. The runway's length is the crawl's scroll
-   budget — the schedule's stage sweep is spread across it, so this height is
-   what buys each presentation its dwell time (~700-900px of scroll per work
-   at this length). The pin wrapper holds the title for the WHOLE sequence:
-   it deliberately overflows the runway so the sticky release lands where the
-   last presentation folds (runway end − 100vh + 80vh ≈ the close backstop),
-   and only then does the page hand over to contact. The old early release
-   predates the presented-point fold — bodies now close geometrically before
-   their exit path reaches the title's corner, so nothing clips it while it
-   stays. */
-.works-runway { height: 370vh; }
-.works-pin { height: calc(100% + 50vh); }
+/* The section is a scroll runway. The axle now turns at ONE constant rate
+   across the entire page (hero pose → night slot, one revolution), so the
+   runway's length is what positions the works moment relative to that
+   rotation: it is sized so the section top pins at ~25% of the animation —
+   just before the first body reaches the presented point at ~27% — and the
+   four presentations land at ~27/38/48/58% with ~800px of scroll each. The
+   pin wrapper releases the title at ~75%, once the last body has folded and
+   the train is climbing out. Change this height and the works moment slides
+   against the (fixed) rotation schedule — the hook derives its thresholds
+   from the measured layout, but the presentations themselves are pinned to
+   the constant rate, not to the section. */
+.works-runway { height: 645vh; }
+.works-pin { height: calc(100% - 100vh); }
 .works-stage {
   position: sticky;
   top: 0;
@@ -1129,29 +1130,40 @@ footer.is-grown .bg-flower-star {
 .bg-flower.is-cutting--keep.is-cutting--from-right .bg-flower-main {
   animation: flower-cut-sweep-from-right 160ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
 }
-/* After the fall, the missing top wipes back in upward from the same cut
-   line — regrowth from the wound, not a remount. */
-.bg-flower.is-regrowing .bg-flower-main {
-  animation: flower-regrow-top 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+/* Regrowth from the stump. After a kept cut the plant re-randomises its
+   height (the box's height changes) and GROWS the missing stretch the same
+   way the intro grows the whole stem: scaleY on the stem, the bloom riding
+   the tip. --regrow-from is the stump as a fraction of the new height
+   (set by the component), so the stem starts already standing at the
+   stump and the bloom starts at its top, and both climb to the new full
+   height together. The remounted stem/bloom (epoch key) are what replay
+   these animations; --regrow is the duration. !important beats the
+   higher-specificity intro-growth rules (footer.is-grown ...). */
+/* Keyed on the REGROWN parts themselves (data-regrown, set on the remounted
+   stem/bloom), not on the plant's transient .is-regrowing phase: an
+   animation that vanishes with its class takes its fill-mode with it, and
+   the remounted parts never ran the intro growth — they'd snap back to
+   scaleY(0) / bloom-at-base the moment the phase cleared. Left on the
+   element, it plays once and holds its end state for good. */
+.bg-flower-main .bg-flower-stem[data-regrown] {
+  animation: flower-regrow-stem var(--regrow, 1.4s) cubic-bezier(0.22, 1, 0.36, 1) both !important;
 }
-@keyframes flower-regrow-top {
-  from {
-    clip-path: polygon(
-      -200px 9999px,
-      200px 9999px,
-      200px var(--cut-right, 0px),
-      -200px var(--cut-left, 0px)
-    );
-  }
-  to {
-    clip-path: polygon(
-      -200px 9999px,
-      200px 9999px,
-      200px -9999px,
-      -200px -9999px
-    );
-  }
+.bg-flower-main .bg-flower-star[data-regrown] {
+  animation: flower-regrow-bloom var(--regrow, 1.4s) cubic-bezier(0.22, 1, 0.36, 1) both !important;
 }
+@keyframes flower-regrow-stem {
+  from { transform: scaleY(var(--regrow-from, 0)); }
+  to   { transform: scaleY(1); }
+}
+@keyframes flower-regrow-bloom {
+  0%   { top: calc((1 - var(--regrow-from, 0)) * 100%); transform: translate(-50%, -100%) scale(0.15); opacity: 0; }
+  15%  { opacity: 1; }
+  100% { top: 0%; transform: translate(-50%, -100%) scale(1); opacity: 1; }
+}
+/* Leaves the regrown stretch sprouts: epoch > 0 leaves have --leaf-delay
+   0s and simply play their normal grow-in as they mount. Surviving leaves
+   below the stump keep their grown state (their animation already ran with
+   fill-mode forwards, and they are not remounted). */
 
 /* A falling leaf clone. The standing plant's copy of a cut leaf simply
    isn't rendered (leaf stubs unmount), so there is no hidden-but-mounted
@@ -1359,10 +1371,11 @@ footer.is-grown .bg-flower-star {
   }
 }
 
-/* Pure translate + rotate fall — no opacity change. The piece rides the
-   curve down past the footer's bottom edge (where it gets cropped by the
-   .footer-flowers clip-path) and is then unmounted by React, so there's no
-   visible stop or fade. */
+/* Pure translate + rotate fall — no opacity change. The piece drops with a
+   gentle tilt and a drift to one side or the other (--top-fall-dx/rotate
+   carry the side, randomised per cut), rides past the footer's bottom edge
+   (where the .footer-flowers clip-path crops it) and is then unmounted by
+   React, so there's no visible stop or fade. */
 @keyframes flower-cut-top-fall {
   from {
     transform: translate(0, 0) rotate(0);
@@ -1845,6 +1858,35 @@ footer.is-grown .bg-flower-star {
    yields to the flat layout anyway). */
 .contact { padding-bottom: clamp(120px, calc(100vh - 740px), 520px); }
 
+/* The ending runway. The frame (contact + footer, the composed final
+   screen) sticks to the viewport bottom while ENDING_RUNWAY of extra scroll
+   passes beneath it; useSunAnimation reads this same variable to size the
+   orbit coda, so the sun's landing stays anchored to the email and the
+   stars' arrivals live entirely in the runway. */
+:root { --ending-runway: 60vh; }
+.ending { position: relative; }
+/* The frame pins by its TOP, at the offset that puts its bottom on the
+   viewport's bottom edge — the same composed screen as before, now held
+   in place while the spacer after it scrolls beneath. (bottom: 0 sticky
+   would only stop it sinking, not rising; anchoring the top is what keeps
+   it still through the runway.) The frame's height is the contact +
+   footer block's natural height — the sticky offset is measured live by
+   the hook and written to --ending-frame-h, so this holds at any size. */
+.ending-frame {
+  position: sticky;
+  top: calc(100vh - var(--ending-frame-h, 100vh));
+  /* Sticky makes the frame its own stacking context, which would bury the
+     contact section's z-index: 10 inside it — and the email's cursor pill
+     (fixed, z-index 5, meant to slide UNDER the text) would paint over the
+     link. Lift the whole frame above the pill at the root level: above the
+     sun/orbit graphics (1–2) and the pill (5), below the work panel (60)
+     and the nav (70). */
+  z-index: 10;
+}
+.ending-runway { height: var(--ending-runway); }
+html.no-orbit .ending-frame { position: static; }
+html.no-orbit .ending-runway { display: none; }
+
 .contact-body {
   display: flex;
   flex-direction: column;
@@ -2222,8 +2264,8 @@ footer {
   .hero,
   .hero-inner { min-height: 100svh; }
   .works-stage { height: 100svh; }
-  .works-pin { height: calc(100% + 50svh); }
-  .works-runway { height: 370svh; }
+  .works-pin { height: calc(100% - 100svh); }
+  .works-runway { height: 645svh; }
 }
 
 /* The orbit is the works view on every device; only reduced motion (where

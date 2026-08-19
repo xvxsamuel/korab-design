@@ -116,8 +116,18 @@ export default function App() {
         </div>
         <About />
         <Works />
-        <Contact />
-        <Footer />
+        {/* The ending is a sticky frame over a short runway: the composed
+            contact + footer glue to the viewport at the bottom while the
+            runway's extra scroll passes underneath — that scroll belongs to
+            the orbits alone (useSunAnimation's coda), so the sun finishes
+            with the page and the stars keep arriving on a stopped frame. */}
+        <div className="ending">
+          <div className="ending-frame">
+            <Contact />
+            <Footer />
+          </div>
+          <div className="ending-runway" aria-hidden="true" />
+        </div>
       </main>
     </>
   );

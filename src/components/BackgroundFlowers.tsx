@@ -23,6 +23,9 @@ type CutVars = Record<string, string>;
 // which is where the "animations all over the place" came from).
 //
 //   idle ──head / shallow-stem cut──▶ beheading ──▶ topRegrowing ──▶ idle
+//        (the top falls; the stump stays; the plant then re-randomises its
+//         height and GROWS from the stump up — the intro's stem-scale and
+//         bloom-ride mechanics, started at the cut instead of the ground)
 //   idle ──deep-stem cut────────────▶ felling ────▶ (entry replaced)
 //
 // Cuts are accepted ONLY in idle — enforced twice, by pointer-events in CSS
@@ -41,7 +44,9 @@ type PlantPhase =
   | { name: 'idle' }
   | { name: 'felling'; dir: CutDir; vars: CutVars }
   | { name: 'beheading'; dir: CutDir; vars: CutVars }
-  | { name: 'topRegrowing'; vars: CutVars };
+  // `from` is the stump height as a fraction of the NEW stem height — the
+  // regrowth animation starts there (see --regrow-from in style.css).
+  | { name: 'topRegrowing'; vars: CutVars; from: number };
 
 type LeafPhase = 'grown' | 'stub';
 
@@ -53,6 +58,11 @@ type FlowerEntry = Flower & {
   // Every falling leaf gets its own clone, so snipping a second leaf never
   // evaporates the first one mid-drop (the old single slot did exactly that).
   fallingLeaves: { index: number; epoch: number; vars: CutVars }[];
+  // Bumped when a kept cut starts regrowing: the stem and bloom remount so
+  // their growth animations replay — from the stump this time, driven by
+  // --regrow-from (kept here so the variable outlives the phase).
+  bloomEpoch: number;
+  regrowFrom?: number;
 };
 
 const flip = (s: 'right' | 'left'): 'right' | 'left' => (s === 'right' ? 'left' : 'right');
@@ -112,13 +122,20 @@ const makeEntry = (f: Flower): FlowerEntry => ({
   leafPhases: f.leaves.map(() => 'grown'),
   leafEpochs: f.leaves.map(() => 0),
   fallingLeaves: [],
+  bloomEpoch: 0,
 });
 
 // How long the full cut animation runs from click to regrow/replace. Aligned
 // with keyframes in style.css: 0–160ms sweep; 220ms pause; 220–980ms fall.
 const CUT_DURATION_MS = 980;
-// The regrow-top wipe length after a kept cut (matches flower-regrow-top).
-const REGROW_WIPE_MS = 900;
+// How long the regrowth from the stump takes (matches --regrow duration in
+// style.css). A regrown top never has much stem to cover, so it's brisker
+// than the intro's full growth.
+const REGROW_MS = 1400;
+// Minimum / maximum extra stem a regrown plant adds above its stump, in vh.
+const REGROW_MIN_VH = 3;
+const REGROW_MAX_VH = 12;
+const MAX_STEM_VH = 22;
 // A cut leaf falls for this long, then the bed waits before regrowing it.
 const LEAF_FALL_MS = 760;
 const LEAF_REGROW_MS = 2400;
@@ -208,19 +225,27 @@ export default function BackgroundFlowers({
         const clickXPx = event.clientX - rect.left;
         const clickYPx = event.clientY - rect.top;
         const keep = kind === 'head' || clickYPx / rect.height <= KEEP_CUT_FRACTION;
+        // The stump: stem that survives below the cut line, in px. Head cuts
+        // land above the box (negative click Y), so the whole stem stands.
+        const stumpPx = Math.max(0, rect.height - Math.max(0, clickYPx));
 
         // Random tilt within ±CUT_MAX_ANGLE_DEG. Slope works in screen space
         // (y grows downward), so positive slope = line goes down-right.
         const angleDeg = (Math.random() - 0.5) * 2 * CUT_MAX_ANGLE_DEG;
         const slope = Math.tan((angleDeg * Math.PI) / 180);
         const dir: CutDir = Math.random() < 0.5 ? 'from-left' : 'from-right';
+        // The fall: a straight drop with a gentle tilt and a drift to one
+        // side — the side is random, and drift and tilt agree on it so the
+        // piece reads as leaning the way it travels. Randomised per cut so
+        // successive falls don't look identical.
+        const side = Math.random() < 0.5 ? -1 : 1;
         const vars: CutVars = {
           '--cut-left': `${(clickYPx - (CUT_HALF_WIDTH_PX + clickXPx) * slope).toFixed(2)}px`,
           '--cut-right': `${(clickYPx + (CUT_HALF_WIDTH_PX - clickXPx) * slope).toFixed(2)}px`,
           '--cut-fade-dx': `${((Math.random() - 0.5) * 8).toFixed(2)}px`,
-          '--top-fall-dx': `${((Math.random() - 0.5) * 24).toFixed(2)}px`,
+          '--top-fall-dx': `${(side * (14 + Math.random() * 22)).toFixed(2)}px`,
           '--top-fall-dy': `${(300 + Math.random() * 100).toFixed(2)}px`,
-          '--top-fall-rotate': `${((Math.random() - 0.5) * 30).toFixed(2)}deg`,
+          '--top-fall-rotate': `${(side * (10 + Math.random() * 16)).toFixed(2)}deg`,
         };
 
         advance(id, 'idle', (e) => ({
@@ -229,13 +254,59 @@ export default function BackgroundFlowers({
         }));
 
         if (keep) {
-          // Top falls, then wipes back in from the same cut line. Both hops
-          // are phase-guarded, so if this cut never actually started (the
-          // click raced another transition) they fall through silently.
+          // Top falls, then the plant grows back FROM THE STUMP: it picks a
+          // new height (stump + a random stretch), keeps every leaf that sat
+          // below the cut at its absolute height, and replays the growth
+          // mechanics — stem scale and bloom ride — starting at the stump
+          // instead of the ground. Both hops are phase-guarded, so if this
+          // cut never actually started (the click raced another transition)
+          // they fall through silently.
           schedule(id, CUT_DURATION_MS, () =>
-            advance(id, 'beheading', (e) => ({ ...e, phase: { name: 'topRegrowing', vars } })),
+            advance(id, 'beheading', (e) => {
+              const vhPx = window.innerHeight / 100;
+              const oldVh = e.stemVh;
+              const stumpVh = Math.min(oldVh, stumpPx / vhPx);
+              const newVh = Math.min(
+                MAX_STEM_VH,
+                stumpVh + REGROW_MIN_VH + Math.random() * (REGROW_MAX_VH - REGROW_MIN_VH),
+              );
+              const from = newVh > 0 ? stumpVh / newVh : 0;
+              // Re-express surviving leaves in the new box; drop any that
+              // stood above the cut (they went with the fallen top).
+              const kept: { leaf: Flower['leaves'][number]; j: number }[] = [];
+              e.leaves.forEach((leaf, j) => {
+                const leafVh = (leaf.y / 100) * oldVh;
+                if (leafVh <= stumpVh) kept.push({ leaf: { ...leaf, y: (leafVh / newVh) * 100 }, j });
+              });
+              const leaves = kept.map((k) => k.leaf);
+              const leafPhases = kept.map((k) => e.leafPhases[k.j]);
+              const leafEpochs = kept.map((k) => e.leafEpochs[k.j]);
+              // A fresh leaf may sprout on the regrown stretch when there is
+              // room for one — it grows in with the stem.
+              if (newVh - stumpVh > 5 && Math.random() < 0.7) {
+                const side: 'right' | 'left' =
+                  leaves.length > 0
+                    ? flip(leaves[leaves.length - 1].side)
+                    : Math.random() > 0.5 ? 'right' : 'left';
+                const yVh = stumpVh + (newVh - stumpVh) * (0.35 + Math.random() * 0.3);
+                leaves.push({ y: (yVh / newVh) * 100, side, len: 18 + Math.random() * 12 });
+                leafPhases.push('grown');
+                leafEpochs.push(1);
+              }
+              return {
+                ...e,
+                stemVh: newVh,
+                leaves,
+                leafPhases,
+                leafEpochs,
+                fallingLeaves: [],
+                phase: { name: 'topRegrowing', vars, from },
+                regrowFrom: from,
+                bloomEpoch: e.bloomEpoch + 1,
+              };
+            }),
           );
-          schedule(id, CUT_DURATION_MS + REGROW_WIPE_MS, () =>
+          schedule(id, CUT_DURATION_MS + REGROW_MS, () =>
             advance(id, 'topRegrowing', (e) => ({ ...e, phase: { name: 'idle' } })),
           );
         } else {
@@ -263,10 +334,12 @@ export default function BackgroundFlowers({
       if (reducedMotion()) return;
       // A leaf click must never double as a stem cut.
       event.stopPropagation();
+      // Drift and tilt share a random side, like the top's fall.
+      const leafSide = Math.random() < 0.5 ? -1 : 1;
       const vars: CutVars = {
-        '--top-fall-dx': `${((Math.random() - 0.5) * 30).toFixed(2)}px`,
+        '--top-fall-dx': `${(leafSide * (12 + Math.random() * 20)).toFixed(2)}px`,
         '--top-fall-dy': `${(240 + Math.random() * 80).toFixed(2)}px`,
-        '--top-fall-rotate': `${((Math.random() - 0.5) * 60).toFixed(2)}deg`,
+        '--top-fall-rotate': `${(leafSide * (18 + Math.random() * 30)).toFixed(2)}deg`,
       };
       setEntries((prev) =>
         prev.map((e) => {
@@ -372,7 +445,9 @@ export default function BackgroundFlowers({
         const renderBody = (clone: boolean) => (
           <>
             <span
+              key={`stem:${f.bloomEpoch}`}
               className="bg-flower-stem bg-flower-hit bg-flower-hit--stem"
+              data-regrown={f.bloomEpoch > 0 ? '' : undefined}
               onClick={clone ? undefined : cutPlant(f.id, 'stem')}
             />
             {f.leaves.map((leaf, j) =>
@@ -381,7 +456,9 @@ export default function BackgroundFlowers({
                 : null,
             )}
             <span
+              key={`bloom:${f.bloomEpoch}`}
               className="bg-flower-star bg-flower-hit bg-flower-hit--head"
+              data-regrown={f.bloomEpoch > 0 ? '' : undefined}
               onClick={clone ? undefined : cutPlant(f.id, 'head')}
             >
               <Star className="bg-flower-star-svg" aria-hidden="true" />
@@ -397,6 +474,15 @@ export default function BackgroundFlowers({
           phase.name === 'topRegrowing' ? ' is-regrowing' : '',
         ].join('');
         const cutVars = phase.name === 'idle' ? undefined : phase.vars;
+        // --regrow-from stays on the plant after the phase clears: the
+        // regrown parts' animations hold their end state via fill-mode and
+        // still resolve the variable from the cascade.
+        const regrowVars =
+          phase.name === 'topRegrowing'
+            ? { '--regrow-from': phase.from.toFixed(4), '--regrow': `${REGROW_MS}ms` }
+            : f.regrowFrom !== undefined
+              ? { '--regrow-from': f.regrowFrom.toFixed(4), '--regrow': `${REGROW_MS}ms` }
+              : undefined;
 
         return (
           <span
@@ -409,6 +495,7 @@ export default function BackgroundFlowers({
                 '--grow': `${f.grow}s`,
                 '--star-size': `${f.starPx}px`,
                 ...(cutVars ?? {}),
+                ...(regrowVars ?? {}),
               } as CSSVars
             }
           >
