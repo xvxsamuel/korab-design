@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Star from '../assets/star.svg?react';
 import StarFlat from '../assets/starflat.svg?react';
@@ -84,6 +84,14 @@ const projects: Project[] = [
 
 const PANEL_ID = 'work-panel';
 
+function projectPalette(project: Project): React.CSSProperties {
+  return {
+    '--bg': project.bg,
+    '--ink': project.ink,
+    '--accent': project.accent,
+  } as React.CSSProperties;
+}
+
 export default function Works() {
   const [open, setOpen] = useState<string | null>(null);
   // Holds the project data while the panel is sliding out, so children
@@ -140,7 +148,7 @@ export default function Works() {
     return () => window.clearTimeout(t);
   }, [open]);
 
-  const close = () => {
+  const close = useCallback(() => {
     setOpen(null);
     const last = lastTriggerRef.current;
     if (last) {
@@ -155,7 +163,7 @@ export default function Works() {
         else cardRefs.current[last]?.focus({ preventScroll: true });
       });
     }
-  };
+  }, []);
 
   // The panel is an overlay: the page underneath freezes exactly where it was
   // and is put back byte-for-byte on close, so the orrery resumes mid-stride
@@ -179,12 +187,11 @@ export default function Works() {
       document.documentElement.classList.remove('lock-scroll');
       // Instant, not smooth — a smooth restore would animate the orrery
       // through every intermediate scroll position on the way back.
-      window.scrollTo(0, lockedScrollRef.current);
+      window.scrollTo({ top: lockedScrollRef.current, behavior: 'instant' });
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('works:close', onExternalClose);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, close]);
 
   // Push the open project's palette onto the nav (only). Track `open`, not
   // `displayed`, so the nav resets instantly when closing — the panel keeps
@@ -218,14 +225,7 @@ export default function Works() {
     <div
       key={`${status}-${p.id}`}
       className={`work-panel-layer work-panel-layer-${status}${cycleDir ? ` cycle-${cycleDir}` : ''}`}
-      style={
-        {
-          background: p.bg,
-          '--bg': p.bg,
-          '--ink': p.ink,
-          '--accent': p.accent,
-        } as React.CSSProperties
-      }
+      style={{ background: p.bg, ...projectPalette(p) }}
     >
       <div className="work-panel-inner">
         <div className="work-panel-content">
@@ -259,12 +259,8 @@ export default function Works() {
 
   return (
     <section id="works" className="works">
-      {/* Scroll runway for the orbit below. The runway sets how much scroll
-          the crossing gets; the pin wrapper inside it sets how long the title
-          holds. They're deliberately different lengths: the title lets go
-          well before the runway ends, so it is already scrolling away while
-          the stars are still crossing — they never have to share the top of
-          the frame with it. */}
+      {/* The runway controls scroll length; the shorter pin releases the
+          heading before the orbit finishes. Text paints above the stars. */}
       <div className="works-runway">
         <div className="works-pin">
           <div className="works-stage">
@@ -276,8 +272,7 @@ export default function Works() {
       {/* Bodies riding the works orbit. Fixed to the viewport so they share a
           coordinate space with the sun; useSunAnimation writes their
           transforms in the same frame it moves the sun, so they never lag
-          behind the ring they sit on. Hidden on small/touch screens, where
-          .works-grid takes over. */}
+          behind the ring they sit on. Reduced motion uses .works-grid. */}
       <div className="works-orbit">
         {projects.map((p) => (
           <button
@@ -322,8 +317,7 @@ export default function Works() {
         ))}
       </div>
 
-      {/* Small-screen / touch fallback: the orbit needs a wide viewport and a
-          pointer, so below the breakpoint the same projects list out flat. */}
+      {/* Reduced-motion fallback: the same projects in a static list. */}
       <ul className="works-grid">
         {projects.map((p) => (
           <li key={p.id}>
@@ -354,15 +348,7 @@ export default function Works() {
       {createPortal(
         <div
           className="work-portal"
-          style={
-            paletteProject
-              ? ({
-                  '--bg': paletteProject.bg,
-                  '--ink': paletteProject.ink,
-                  '--accent': paletteProject.accent,
-                } as React.CSSProperties)
-              : undefined
-          }
+          style={paletteProject ? projectPalette(paletteProject) : undefined}
         >
           <div
             className={`work-panel-backdrop${isOpen ? ' is-open' : ''}`}

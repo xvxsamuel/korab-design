@@ -70,13 +70,15 @@ function computeSlots(footer: HTMLElement): number[] {
 // Local-time clock in the Europe/Amsterdam zone (covers The Hague). Returns
 // HH:MM in 24-hour format. Re-evaluated each second so the visible string
 // stays current; React skips re-render when the formatted value is unchanged.
+const amsterdamTime = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Amsterdam',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
 function formatAmsterdamTime(): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/Amsterdam',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date());
+  return amsterdamTime.format(new Date());
 }
 
 export default function Footer() {

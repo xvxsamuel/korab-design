@@ -44,11 +44,18 @@ html,
 body {
   margin: 0;
   padding: 0;
+  /* Prevent bounce near the hero so its text stays aligned with the star. */
+  overscroll-behavior-y: none;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--body);
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
+}
+
+html.past-scroll-start,
+html.past-scroll-start body {
+  overscroll-behavior-y: auto;
 }
 
 html {
@@ -599,17 +606,10 @@ section {
      on flex items). Negative margin on .hero-letter then compresses further. */
   gap: 0;
 }
-/* Entrance: blur the row and feed it through #textThreshold so the blurred
-   pixels snap to a crisp gooey shape. Hero.tsx animates --text-blur from 5px
-   to 0 and the threshold's tableValues from 90% → 5% over 3s on an ease-out
-   curve, then drops .is-entering so the filter chain comes off and the final
-   text renders with native antialiased edges (no jagged threshold residue). */
+/* Hero.tsx blooms the overlay from 13px blur to sharp ink, relaxes the alpha
+   threshold, then fades it over native text before unmounting the overlay. */
 .hero-name .row.is-entering {
-  /* Fallback matches START_BLUR in Hero.tsx so the first paint already
-     shows the title at the bloom's starting blur, in sync with the stars
-     (whose CSS keyframe also starts at 13px). Otherwise the title would
-     flash at 5px for a frame before Hero's rAF kicks in, making the stars
-     read as delayed by comparison. */
+  /* Match START_BLUR in Hero.tsx on the first paint. */
   filter: blur(var(--text-blur, 13px)) url(#textThreshold);
 }
 /* Bloom overlay: a duplicate of the title rows, stacked on top of the
@@ -678,10 +678,13 @@ section {
    against the (fixed) rotation schedule — the hook derives its thresholds
    from the measured layout, but the presentations themselves are pinned to
    the constant rate, not to the section. */
+/* Keep the fixed orbit in the root stack, below all section text. */
+.works { z-index: auto; }
 .works-runway { height: 645vh; }
 .works-pin { height: calc(100% - 100vh); }
 .works-stage {
   position: sticky;
+  z-index: 10;
   top: 0;
   height: 100vh;
   pointer-events: none;
@@ -724,7 +727,7 @@ section {
 }
 /* The morph between the body's two faces rides the one --in the hook writes,
    as consecutive overlapping phases: the faces cross-fade first (0→0.3), the
-   solid face sharpens as the mark grows (through ~0.8), the image opens
+   mark grows through the full opening ramp, the image opens
    inside it (0.35→0.8), the label arrives last (0.7→1). `scale` composes
    with the hover transform below, so the two never fight over one property. */
 .work-body-mark {
@@ -738,7 +741,7 @@ section {
      presented body holds full size through the centre instead of peaking
      for a single instant. */
   scale: calc(
-    (0.52 + 0.48 * clamp(0, var(--in, 0) * 1.25, 1)) *
+    (0.52 + 0.48 * clamp(0, var(--in, 0), 1)) *
     (0.9 + 0.18 * clamp(0, var(--focus, 0) * 2, 1))
   );
   transition: transform 0.5s var(--ease-soft);
@@ -927,6 +930,7 @@ section {
 
 /* Reduced motion: nothing drives the orbit, so useSunAnimation flags the
    document and the flat list takes over. */
+html.no-orbit .works { z-index: 10; }
 html.no-orbit .works-runway { height: auto; }
 html.no-orbit .works-pin { height: auto; }
 html.no-orbit .works-stage { position: static; height: auto; }
@@ -2167,6 +2171,7 @@ footer {
 .footer-top-alt svg { display: block; }
 
 .footer-flowers {
+  --stem-bleed: 24px;
   position: absolute;
   left: 0;
   right: 0;
@@ -2174,14 +2179,19 @@ footer {
   height: 100%;
   pointer-events: none;
   z-index: 1;
-  /* Clip ONLY at the bottom edge so the cut easter-egg's falling top half
-     gets cropped out as it crosses the footer's bottom (which sits at the
-     page's bottom). Top/left/right are pulled way out so tall stems and the
-     stars they carry can still poke up into the contact section above the
-     footer — that's intentional, see the `footer { overflow: visible }` rule
-     and its comment. The order in inset() is top right bottom left;
-     negative values extend outward (no clipping there). */
-  clip-path: inset(-9999px -9999px 0 -9999px);
+  /* Allow a little stem below the footer; crop falling pieces beyond it.
+     The page's existing main clip keeps this from adding scroll distance. */
+  clip-path: inset(-9999px -9999px calc(-1 * var(--stem-bleed)) -9999px);
+}
+.footer-flowers .bg-flower-main > .bg-flower-stem::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  height: var(--stem-bleed);
+  background: inherit;
+  pointer-events: none;
 }
 
 /* Responsive --------------------------------------------------------- */

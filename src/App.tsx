@@ -10,7 +10,7 @@ import Contact from './components/Contact';
 import Footer from './components/Footer';
 import { useSunAnimation } from './hooks/useSunAnimation';
 
-const sectionIds = ['home', 'works', 'about', 'contact'] as const;
+const sectionIds = ['home', 'about', 'works', 'contact'] as const;
 
 export default function App() {
   const [active, setActive] = useState<string>('home');
@@ -35,10 +35,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const update = () => setCueHidden(window.scrollY > 40);
+    const root = document.documentElement;
+    const update = () => {
+      const pastStart = window.scrollY > 40;
+      setCueHidden(pastStart);
+      // Disable bounce before reaching the hero; allow it at the footer.
+      root.classList.toggle('past-scroll-start', pastStart);
+    };
     update();
     window.addEventListener('scroll', update, { passive: true });
-    return () => window.removeEventListener('scroll', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      root.classList.remove('past-scroll-start');
+    };
   }, []);
 
   useSunAnimation();
@@ -53,22 +62,11 @@ export default function App() {
       </div>
       <svg className="ink-noise-defs" aria-hidden="true">
         <defs>
-          {/* Hero title entrance: a CSS gaussian blur is composed with this
-              discrete threshold so the blurred text snaps to a crisp gooey
-              shape. Hero.tsx animates --text-blur and the tableValues over
-              3s, then strips the filter so the final glyphs render with
-              their native antialiasing (no jagged threshold edges). */}
+          {/* Hero.tsx blooms a filtered title overlay, then fades it away
+              over the native text before unmounting it. */}
           <filter id="textThreshold" x="-15%" y="-25%" width="130%" height="150%">
-            {/* Threshold alpha only, then re-paint with a pure ink flood so
-                the displayed colour stays #445b4b at every step of the
-                animation. Discrete tableValues bucket the input alpha
-                range so Hero.tsx can animate the cut from strict (90%) to
-                permissive (10%) by editing tableValues each frame. The
-                filter is left applied permanently after the bloom — never
-                dropped — because the layer-compositing transition from
-                "filtered" to "no filter" caused a perceptible flash around
-                the title even when the final filter output matched native
-                rendering. */}
+            {/* Threshold alpha, then flood with ink to preserve the title's
+                colour as the threshold opens from strict to permissive. */}
             <feComponentTransfer in="SourceGraphic" result="thresh">
               <feFuncA className="threshold-func" type="discrete" tableValues="0 0 0 0 0 0 0 0 0 1" />
             </feComponentTransfer>
@@ -99,10 +97,6 @@ export default function App() {
           <Star className="sun-inline" />
         </span>
       </div>
-      {/* The second star is no longer its own element — the works train in
-          Works.tsx rides ring B and inherits its start and landing. */}
-
-
       <Cursor />
       <Nav active={active} />
 

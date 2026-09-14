@@ -82,6 +82,7 @@ export default function Hero() {
     const crossfadeEnd = crossfadeStart + CROSSFADE_DURATION;
 
     let raf = 0;
+    let lastOnes = 1;
     const step = (now: number) => {
       if (now < settleStart) {
         // Bloom phase: blur shrinks from START_BLUR → 0 with ease-in cubic
@@ -91,7 +92,6 @@ export default function Hero() {
         const e = t * t * t;
         const blur = START_BLUR * (1 - e);
         root.style.setProperty('--text-blur', `${blur.toFixed(3)}px`);
-        funcs.forEach((f) => f.setAttribute('tableValues', THRESHOLD_TABLE_STRICT));
         raf = requestAnimationFrame(step);
       } else if (now < crossfadeStart) {
         // Settle phase: blur pinned at 0, threshold opens ones=1 → ones=9
@@ -101,7 +101,11 @@ export default function Hero() {
         const t = (now - settleStart) / SETTLE_DURATION;
         const e = 1 - Math.pow(1 - t, 2); // ease-out quad
         const ones = 1 + Math.round(e * (THRESHOLD_ONES_END - 1));
-        funcs.forEach((f) => f.setAttribute('tableValues', thresholdTable(ones)));
+        if (ones !== lastOnes) {
+          const table = thresholdTable(ones);
+          funcs.forEach((f) => f.setAttribute('tableValues', table));
+          lastOnes = ones;
+        }
         raf = requestAnimationFrame(step);
       } else if (now < crossfadeEnd) {
         // Cross-fade: snap native to full opacity and fade only the bloom
