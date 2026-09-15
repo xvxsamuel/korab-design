@@ -700,11 +700,10 @@ section {
 }
 
 .work-body {
-  /* Box of the star mark. The image circle inside is sized off the mark's own
-     valley radius (0.3285 of the box, see src/lib/gears.ts): at 58% a ring of
-     star body still shows at the valleys, so the silhouette stays a star. */
+  /* Keep the transparent icon inside the star's valleys so the silhouette
+     stays readable as the star turns behind it. */
   --mark: clamp(88px, 12vw, 176px);
-  --disc: 58%;
+  --icon-size: 33%;
   position: absolute;
   left: 0; top: 0;
   width: var(--mark);
@@ -725,11 +724,8 @@ section {
   outline-offset: 7px;
   border-radius: 50%;
 }
-/* The morph between the body's two faces rides the one --in the hook writes,
-   as consecutive overlapping phases: the faces cross-fade first (0→0.3), the
-   mark grows through the full opening ramp, the image opens
-   inside it (0.35→0.8), the label arrives last (0.7→1). `scale` composes
-   with the hover transform below, so the two never fight over one property. */
+/* The coloured inset and logo grow together as the mark opens. The inset
+   covers the original cutouts; the gold artwork itself stays unchanged. */
 .work-body-mark {
   position: relative;
   display: block;
@@ -746,50 +742,40 @@ section {
   );
   transition: transform 0.5s var(--ease-soft);
 }
-/* Ornate face — star B's own mark, cut-outs and all. Turns with the orbit
-   and hands over to the solid face in the morph's first stretch. Both faces
-   also idle-spin like the big orbit star (gear-spin below), on top of the
-   scroll-driven rotation. */
-.work-body-holey {
-  animation: gear-spin 80s linear infinite;
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  color: var(--accent);
-  rotate: var(--spin, 0deg);
-  opacity: clamp(0, calc(1 - var(--in, 0) * 3.3), 1);
-}
 .work-body-star {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  /* The outer star keeps the original gold throughout the reveal. */
   color: var(--accent);
   animation: gear-spin 80s linear infinite;
   /* Orbital angle, written per frame by useSunAnimation. Only the mark turns —
      the project inside stays upright and readable. */
   rotate: var(--spin, 0deg);
-  /* No filters in the scroll morph — a straight cross-fade with the ornate
-     face. Blur read as smear and the threshold cut read as spikes; both were
-     tried and pulled. The whole morph is opacity + scale. */
-  opacity: clamp(0, calc(var(--in, 0) * 3.3), 1);
-  transition: color 0.35s var(--ease-soft);
 }
-.work-body-disc {
+.work-body-ink {
+  fill: currentColor;
+}
+.work-body-inlay {
+  fill: var(--star-color);
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  /* Both star contours turn together; the logo stays upright in the centre. */
+  transform: scale(clamp(0, var(--in, 0), 1));
+}
+.work-body-icon {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: var(--disc);
-  height: var(--disc);
+  width: var(--icon-size);
+  height: var(--icon-size);
   /* Scale lives INSIDE the transform, after the centering translate. As a
      standalone `scale` property it would compose before `transform`, scaling
-     the -50%,-50% offset with it — which slid the disc's origin toward the
+     the -50%,-50% offset with it — which slid the icon's origin toward the
      mark's lower-right corner and made the image grow in from the side
      instead of from the centre. */
-  transform: translate(-50%, -50%) scale(clamp(0, calc((var(--in, 0) - 0.35) * 2.25), 1));
-  border-radius: 50%;
-  overflow: hidden;
+  transform: translate(-50%, -50%) scale(clamp(0, var(--in, 0), 1));
 }
 .work-body-label {
   /* Gated by the morph, weighted by the menu focus. The focus factor
@@ -802,11 +788,11 @@ section {
     (0.3 + 0.7 * clamp(0, var(--focus, 0) * 2, 1))
   );
 }
-.work-body-disc img {
+.work-body-icon img {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 .work-body-gear {
   position: absolute;
@@ -820,9 +806,7 @@ section {
 /* While the hand turns the gear, its idle spin holds still — one rotation
    source at a time. Resuming from pause continues where it left off, so
    there's no snap on unhover. */
-.work-body:hover .work-body-holey,
 .work-body:hover .work-body-star,
-.work-body:focus-visible .work-body-holey,
 .work-body:focus-visible .work-body-star {
   animation-play-state: paused;
 }
@@ -888,7 +872,7 @@ section {
   width: 96px;
   height: 96px;
   /* Same valley-radius ratio as the orbit bodies — star silhouette holds. */
-  --disc: 58%;
+  --icon-size: 33%;
 }
 .work-card-star {
   position: absolute;
@@ -897,21 +881,29 @@ section {
   height: 100%;
   color: var(--accent);
 }
-.work-card-disc {
+.work-card-inlay {
+  position: absolute;
+  inset: 19%;
+  width: 62%;
+  height: 62%;
+  color: var(--star-color);
+}
+.work-card-inlay path {
+  fill: currentColor;
+}
+.work-card-icon {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: var(--disc);
-  height: var(--disc);
+  width: var(--icon-size);
+  height: var(--icon-size);
   transform: translate(-50%, -50%);
-  border-radius: 50%;
-  overflow: hidden;
 }
-.work-card-disc img {
+.work-card-icon img {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 .work-card-name {
   font-family: var(--display);
@@ -962,7 +954,7 @@ html.no-orbit .works-grid { display: block; }
 @keyframes gear-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   .gear-cw, .gear-ccw,
-  .work-body-holey, .work-body-star { animation: none; }
+  .work-body-star { animation: none; }
 }
 
 /* Cog cluster in the project panel: A drives B (down-right) and C
@@ -987,7 +979,9 @@ html.no-orbit .works-grid { display: block; }
   position: absolute;
   left: 50%;
   bottom: 0;
-  top: 0;
+  /* One continuous hairline reaches into the rotated bloom; a separate
+     segment inside its scaled wrapper rasterised at a different thickness. */
+  top: calc(var(--star-size, 18px) * -0.17);
   /* 1px hairline, deliberately NOT centred: translateX(-50%) of a 1px box
      is a half-pixel offset, which parked the stem's edges exactly on pixel
      boundaries — whether it rasterised at all then depended on the
@@ -1065,24 +1059,27 @@ footer.is-grown .bg-flower-leaf--left {
   width: var(--star-size, 18px);
   height: var(--star-size, 18px);
   color: var(--accent);
-  transform: translate(-50%, -100%) scale(0.15);
-  transform-origin: 50% 100%;
+  transform: translate(-50%, -99%) scale(0.15);
+  transform-origin: 50% 99%;
   display: block;
   opacity: 0;
 }
 .bg-flower-star-svg {
+  position: relative;
   display: block;
   width: 100%;
   height: 100%;
+  transform-origin: 50% 50%;
+  transform: rotate(var(--bloom-angle, 0deg));
 }
 .work-panel.is-open .bg-flower-star,
 footer.is-grown .bg-flower-star {
   animation: star-bloom var(--grow, 2s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 @keyframes star-bloom {
-  0%   { top: 100%; transform: translate(-50%, -100%) scale(0.15); opacity: 0; }
+  0%   { top: 100%; transform: translate(-50%, -99%) scale(0.15); opacity: 0; }
   15%  { opacity: 1; }
-  100% { top: 0%;   transform: translate(-50%, -100%) scale(1);    opacity: 1; }
+  100% { top: 0%;   transform: translate(-50%, -99%) scale(1);    opacity: 1; }
 }
 
 /* Hit-targets for the flower easter egg: the visuals themselves. The bloom
@@ -1160,9 +1157,9 @@ footer.is-grown .bg-flower-star {
   to   { transform: scaleY(1); }
 }
 @keyframes flower-regrow-bloom {
-  0%   { top: calc((1 - var(--regrow-from, 0)) * 100%); transform: translate(-50%, -100%) scale(0.15); opacity: 0; }
+  0%   { top: calc((1 - var(--regrow-from, 0)) * 100%); transform: translate(-50%, -99%) scale(0.15); opacity: 0; }
   15%  { opacity: 1; }
-  100% { top: 0%; transform: translate(-50%, -100%) scale(1); opacity: 1; }
+  100% { top: 0%; transform: translate(-50%, -99%) scale(1); opacity: 1; }
 }
 /* Leaves the regrown stretch sprouts: epoch > 0 leaves have --leaf-delay
    0s and simply play their normal grow-in as they mount. Surviving leaves
@@ -1268,7 +1265,7 @@ footer.is-grown .bg-flower-star {
 .bg-flower-cut-top .bg-flower-star {
   animation: none !important;
   top: 0%;
-  transform: translate(-50%, -100%) scale(1);
+  transform: translate(-50%, -99%) scale(1);
   opacity: 1;
 }
 

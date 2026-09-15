@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import Star from '../assets/star.svg?react';
+import WorkStar from './WorkStar';
 import StarFlat from '../assets/starflat.svg?react';
 import Cogs from './Cogs';
 
@@ -10,8 +10,11 @@ type Project = {
   role: string;
   tags: string;
   year: string;
-  /** Browse-view artwork. Cropped to a circle, so keep the subject centred. */
+  /** Artwork shown inside the project detail panel. */
   image: string;
+  /** Transparent artwork for the orbit and reduced-motion list. */
+  icon: string;
+  starColor: string;
   bg: string;
   ink: string;
   accent: string;
@@ -26,7 +29,9 @@ const projects: Project[] = [
     role: 'Law Firm',
     tags: 'UX Research · Brand Identity · Web',
     year: '2026',
-    image: '/works/korabova-lovich.svg',
+    image: '/works/korabova-lovich-icon.png',
+    icon: '/works/korabova-lovich-icon.png',
+    starColor: '#2C286D',
     bg: '#E5D2A8',
     ink: '#5a4423',
     accent: '#c8743a',
@@ -41,7 +46,9 @@ const projects: Project[] = [
     role: 'Data Analytics Website',
     tags: 'Data Science · Development · Gaming · Web',
     year: '2026',
-    image: '/works/aram-pig.svg',
+    image: '/works/aram-pig-icon.png',
+    icon: '/works/aram-pig-icon.png',
+    starColor: '#001225',
     bg: '#C8D8C9',
     ink: '#2e4332',
     accent: '#c8a040',
@@ -56,7 +63,9 @@ const projects: Project[] = [
     role: 'AI Startup',
     tags: 'Product Design · Brand Identity · Web Extension',
     year: '2026',
-    image: '/works/veracity.svg',
+    image: '/works/veracity-icon.png',
+    icon: '/works/veracity-icon.png',
+    starColor: '#40D2A1',
     bg: '#D9CCDD',
     ink: '#4a3858',
     accent: '#a86496',
@@ -71,7 +80,9 @@ const projects: Project[] = [
     role: 'Online Store',
     tags: 'UX Research · Web · Ecommerce',
     year: '2025',
-    image: '/works/omas-pantry.svg',
+    image: '/works/omas-pantry-icon.png',
+    icon: '/works/omas-pantry-icon.png',
+    starColor: '#073B3A',
     bg: '#E8C2A1',
     ink: '#5a3019',
     accent: '#b85a26',
@@ -281,7 +292,9 @@ export default function Works() {
             ref={(el) => {
               triggerRefs.current[p.id] = el;
             }}
-            className={`work-body${open === p.id ? ' is-open' : ''}`}
+            // Keep this stable: the orbit hook owns the dynamic is-live class.
+            className="work-body"
+            style={{ '--star-color': p.starColor } as React.CSSProperties}
             onClick={() => toggle(p.id)}
             aria-expanded={open === p.id}
             aria-controls={PANEL_ID}
@@ -290,23 +303,18 @@ export default function Works() {
             // pointer events, via .is-live) once the body has become a work.
             tabIndex={-1}
           >
-            {/* Two faces of one body. Until the works section it wears the
-                ornate cut-out mark — the second star's own face — then the
-                scroll bloom burns in the solid waymark mark with the project
-                cut into a circle inside it, the points reading as a star
-                around the image. */}
+            {/* The project inset grows across the original star's cutouts. */}
             <span className="work-body-mark">
-              {/* The gear wrapper is what the hover turns — both star faces,
-                  never the image. The disc sits outside it so the project
+              {/* The gear wrapper is what the hover turns — the star,
+                  never the icon. The icon sits outside it so the project
                   stays upright through every rotation source. */}
               <span className="work-body-gear" aria-hidden="true">
-                <Star className="work-body-holey" aria-hidden="true" />
-                <StarFlat className="work-body-star" aria-hidden="true" />
+                <WorkStar />
               </span>
-              <span className="work-body-disc">
+              <span className="work-body-icon">
                 {/* Eager: the bodies are fixed-position, so a lazy loader has
                     no reliable "scrolled into view" moment to hook onto. */}
-                <img src={p.image} alt="" decoding="async" />
+                <img src={p.icon} alt="" decoding="async" />
               </span>
             </span>
             <span className="work-body-label">
@@ -327,6 +335,7 @@ export default function Works() {
                 cardRefs.current[p.id] = el;
               }}
               className="work-card"
+              style={{ '--star-color': p.starColor } as React.CSSProperties}
               onClick={() => toggle(p.id)}
               aria-expanded={open === p.id}
               aria-controls={PANEL_ID}
@@ -334,8 +343,9 @@ export default function Works() {
             >
               <span className="work-card-mark">
                 <StarFlat className="work-card-star" aria-hidden="true" />
-                <span className="work-card-disc">
-                  <img src={p.image} alt="" loading="lazy" decoding="async" />
+                <StarFlat className="work-card-inlay" aria-hidden="true" />
+                <span className="work-card-icon">
+                  <img src={p.icon} alt="" loading="lazy" decoding="async" />
                 </span>
               </span>
               <span className="work-card-name">{p.name}</span>

@@ -54,7 +54,7 @@ const RAD = Math.PI / 180;
 // adding or removing a work re-spaces the rest instead of stretching the
 // train; the per-neighbour step is derived in the hook from the body count.
 const WORK_SPAN = 126 * RAD;
-// Morphs cross-fade and scale around the arc's lowest point. Angular
+// Project insets grow and recede around the arc's lowest point. Angular
 // windows keep opening, folding, and focus aligned at every viewport size.
 const PRESENT_POINT = 90 * RAD;
 // Start opening earlier, but still reach full size 10° before presentation.

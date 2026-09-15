@@ -7,7 +7,7 @@ export type Flower = {
   slot: number;
   leftPct: number;
   stemVh: number;
-  starPx: number;
+  bloomAngle: number;
   grow: number;
   leaves: { y: number; side: 'right' | 'left'; len: number }[];
 };
@@ -66,20 +66,21 @@ type FlowerEntry = Flower & {
 };
 
 const flip = (s: 'right' | 'left'): 'right' | 'left' => (s === 'right' ? 'left' : 'right');
+const MIN_STEM_VH = 6;
+const MAX_STEM_VH = 22;
+
+const stemProportion = (stemVh: number) =>
+  Math.max(0, Math.min(1, (stemVh - MIN_STEM_VH) / (MAX_STEM_VH - MIN_STEM_VH)));
 
 function generateFlower(slot: number, jitter: number): Flower {
-  const minStem = 6;
-  const maxStem = 22;
-  const stemVh = minStem + Math.random() * (maxStem - minStem);
-  const norm = (stemVh - minStem) / (maxStem - minStem);
-  const sizeJitter = (Math.random() - 0.5) * 26;
-  const starPx = Math.max(34, 54 + norm * 12 + sizeJitter);
+  const stemVh = MIN_STEM_VH + Math.random() * (MAX_STEM_VH - MIN_STEM_VH);
+  const norm = stemProportion(stemVh);
   // Tall flowers take longer to grow than short ones, with a small jitter
   // on top so equal-height stems don't animate in lockstep.
   const grow = 1.0 + norm * 1.4 + (Math.random() - 0.5) * 0.4;
   // Leaf count scales with stem height: short stems get 1, tall stems up to 3.
   const leafCount = Math.max(1, Math.round(1 + norm * 2));
-  // Leaves scale with the flower (starPx) so they look proportional —
+  // Leaves scale with stem height like the bloom so they look proportional —
   // small flowers get small leaves, large flowers get larger ones.
   const leafScale = (0.95 + norm * 0.35) * (0.9 + Math.random() * 0.25);
   const startSide: 'right' | 'left' = Math.random() > 0.5 ? 'right' : 'left';
@@ -97,7 +98,7 @@ function generateFlower(slot: number, jitter: number): Flower {
     slot,
     leftPct: slot + (Math.random() * jitter * 2 - jitter),
     stemVh,
-    starPx,
+    bloomAngle: (Math.random() - 0.5) * 36,
     grow,
     leaves,
   };
@@ -132,10 +133,6 @@ const CUT_DURATION_MS = 980;
 // style.css). A regrown top never has much stem to cover, so it's brisker
 // than the intro's full growth.
 const REGROW_MS = 1400;
-// Minimum / maximum extra stem a regrown plant adds above its stump, in vh.
-const REGROW_MIN_VH = 3;
-const REGROW_MAX_VH = 12;
-const MAX_STEM_VH = 22;
 // A cut leaf falls for this long, then the bed waits before regrowing it.
 const LEAF_FALL_MS = 760;
 const LEAF_REGROW_MS = 2400;
@@ -255,7 +252,7 @@ export default function BackgroundFlowers({
 
         if (keep) {
           // Top falls, then the plant grows back FROM THE STUMP: it picks a
-          // new height (stump + a random stretch), keeps every leaf that sat
+          // height within the removed stretch, keeps every leaf that sat
           // below the cut at its absolute height, and replays the growth
           // mechanics — stem scale and bloom ride — starting at the stump
           // instead of the ground. Both hops are phase-guarded, so if this
@@ -266,10 +263,9 @@ export default function BackgroundFlowers({
               const vhPx = window.innerHeight / 100;
               const oldVh = e.stemVh;
               const stumpVh = Math.min(oldVh, stumpPx / vhPx);
-              const newVh = Math.min(
-                MAX_STEM_VH,
-                stumpVh + REGROW_MIN_VH + Math.random() * (REGROW_MAX_VH - REGROW_MIN_VH),
-              );
+              // Replace only what was trimmed. A head-only cut keeps its
+              // stem height; repeated trims cannot ratchet it up to the cap.
+              const newVh = stumpVh + (oldVh - stumpVh) * (0.8 + Math.random() * 0.2);
               const from = newVh > 0 ? stumpVh / newVh : 0;
               // Re-express surviving leaves in the new box; drop any that
               // stood above the cut (they went with the fallen top).
@@ -493,7 +489,8 @@ export default function BackgroundFlowers({
                 left: `${f.leftPct}%`,
                 height: `${f.stemVh}vh`,
                 '--grow': `${f.grow}s`,
-                '--star-size': `${f.starPx}px`,
+                '--star-size': `${42 + stemProportion(f.stemVh) * 36}px`,
+                '--bloom-angle': `${f.bloomAngle}deg`,
                 ...(cutVars ?? {}),
                 ...(regrowVars ?? {}),
               } as CSSVars
