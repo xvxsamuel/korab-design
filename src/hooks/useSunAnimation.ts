@@ -19,15 +19,16 @@ const SUN_END     = { x: 6.25,  y: 6.25 };   // grid (1, 1)
 // the works axle's rate — and saturates the arc while the star is hidden
 // for the works stage, so no rate change is ever on screen.
 const STAR_ARC_SCALE   = 1.4;
-// Ring radii as a fraction of the placeholder-derived base distance.
-// Ring A's value is MEASURED, not aesthetic guesswork: the title's kerning
-// pulls "Korab" 0.6em left over the placeholder (tight lockup), so the
-// star must sit beyond the placeholder centre to clear the K. 1.1284 puts
-// the star's right tips exactly 14px off the K's ink at the reference
-// size (solved against the glyph box; 1.0 overlapped the K, 1.15 drifted
-// wide). Ring B stays referenced to the same base so it isn't dragged
-// along when ring A is tweaked.
-const RING_A_SCALE   = 1.1284;
+// Star A's hero pose, as an offset from the placeholder's centre in the
+// title's em. The title's kerning pulls "Korab" 0.6em left over the
+// placeholder (tight lockup), so the star must sit left of it to clear the
+// K. MEASURED at the 1440×900 reference, where the old 1.1284×-sun-distance
+// ring put the star's right tips exactly 14px off the K's ink. Anchoring to
+// the text rather than to the sun distance keeps that clearance at every
+// viewport and type size (the ratio drifted: it overlapped the K on phones
+// and near-touched it at 1024). Ring A's radius is whatever reaches here.
+const STAR_A_OFFSET_EM = { x: -0.661, y: 0.0272 };
+// Ring B as a fraction of the sun → placeholder distance.
 const RING_B_SCALE   = 0.66;
 // Height cap on ring B. The works bodies present at the ring's lowest point
 // (sunY + radius), and base scales with viewport WIDTH — so on wide screens
@@ -122,61 +123,38 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 // For a ring centered at (cx, cy) with radius R inside a vw×vh viewport,
-// returns the angle on the ring where the visible arc *begins* (going CCW,
-// i.e., backward in SVG path direction) and the fraction of the full ring
-// that's visible. The "top" of the visible arc is the boundary intersection
-// with the smallest y; "bottom" is the largest y. Visible angular span is
-// (topA − bottomA) mod 2π. Used to (a) rotate the SVG circle so the path
-// origin sits at the top of the visible arc and (b) tell the keyframe how
-// far the dashoffset should travel to finish the on-screen drawing.
-function computeRingVisibility(
+// returns the angle where a BACKWARD draw (decreasing angle — the direction
+// the negative dashoffset reveals in) enters the on-screen arc, so the trace
+// starts at the viewport edge instead of spending its first stretch drawing
+// off-screen. The page can open at any scroll, with the sun anywhere on its
+// path, so this samples the ring rather than assuming which edges it cuts:
+// of the visible runs, the longest wins, entered from its high-angle end.
+// Returns null when no part of the ring is on screen.
+const RING_SAMPLES = 720;
+function computeRingDrawStart(
   cx: number, cy: number, R: number, vw: number, vh: number,
-): { topAngle: number | null; visibleFraction: number } {
-  const cands: { a: number; y: number }[] = [];
-  const add = (a: number, x: number, y: number) => {
-    if (x >= 0 && x <= vw && y >= 0 && y <= vh) cands.push({ a, y });
-  };
-
-  // Top edge: y = 0  →  sin(a) = -cy/R
-  const sT = -cy / R;
-  if (Math.abs(sT) <= 1) {
-    const aT = Math.asin(sT);
-    [aT, Math.PI - aT].forEach((a) => add(a, cx + R * Math.cos(a), 0));
+): number | null {
+  const step = (2 * Math.PI) / RING_SAMPLES;
+  const vis: boolean[] = [];
+  for (let i = 0; i < RING_SAMPLES; i++) {
+    const x = cx + R * Math.cos(i * step);
+    const y = cy + R * Math.sin(i * step);
+    vis.push(x >= 0 && x <= vw && y >= 0 && y <= vh);
   }
-  // Bottom edge: y = vh  →  sin(a) = (vh - cy)/R
-  const sB = (vh - cy) / R;
-  if (Math.abs(sB) <= 1) {
-    const aB = Math.asin(sB);
-    [aB, Math.PI - aB].forEach((a) => add(a, cx + R * Math.cos(a), vh));
+  const firstHidden = vis.indexOf(false);
+  if (firstHidden === -1) return -Math.PI / 2;
+  // Walk once around from a hidden sample so no run straddles the seam.
+  let bestEnd = -1;
+  let bestLen = 0;
+  let len = 0;
+  for (let k = 1; k <= RING_SAMPLES; k++) {
+    const i = (firstHidden + k) % RING_SAMPLES;
+    len = vis[i] ? len + 1 : 0;
+    if (len > bestLen) { bestLen = len; bestEnd = i; }
   }
-  // Left edge: x = 0  →  cos(a) = -cx/R
-  const cL = -cx / R;
-  if (Math.abs(cL) <= 1) {
-    const aL = Math.acos(cL);
-    [aL, -aL].forEach((a) => add(a, 0, cy + R * Math.sin(a)));
-  }
-  // Right edge: x = vw  →  cos(a) = (vw - cx)/R
-  const cR = (vw - cx) / R;
-  if (Math.abs(cR) <= 1) {
-    const aR = Math.acos(cR);
-    [aR, -aR].forEach((a) => add(a, vw, cy + R * Math.sin(a)));
-  }
-
-  if (cands.length === 0) {
-    // Either fully visible (ring inside viewport) or fully invisible. Probe
-    // 12 o'clock to disambiguate.
-    if (cx >= 0 && cx <= vw && cy - R >= 0 && cy - R <= vh) {
-      return { topAngle: -Math.PI / 2, visibleFraction: 1 };
-    }
-    return { topAngle: null, visibleFraction: 0 };
-  }
-
-  cands.sort((p, q) => p.y - q.y);
-  const topA = cands[0].a;
-  const botA = cands[cands.length - 1].a;
-  let span = topA - botA;
-  while (span < 0) span += 2 * Math.PI;
-  return { topAngle: topA, visibleFraction: span / (2 * Math.PI) };
+  // One sample past the run's last visible point: just off-screen, so the
+  // first drawn pixel sits on the edge and no sliver is left for the end.
+  return bestEnd === -1 ? null : (bestEnd + 1) * step;
 }
 
 function sampleSun(p: number): { x: number; y: number } {
@@ -270,6 +248,9 @@ export function useSunAnimation() {
     let workPinP    = 0.5;
     let closeEndP   = 0.85;
     let slowEndP    = 0.8;
+    // The sun's last placed position — where the entrance draws from.
+    let sunNowX     = 0;
+    let sunNowY     = 0;
 
     // Per-element transform caches — apply() runs every scroll-settle frame
     // and writes several transforms; gating each on its prior value skips
@@ -322,6 +303,8 @@ export function useSunAnimation() {
       const { x, y } = sampleSun(sunP);
       const sunVX = (x / 100) * vw;
       const sunVY = (y / 100) * vh;
+      sunNowX = sunVX;
+      sunNowY = sunVY;
 
       placeBody(sunEl, sunVX, sunVY, sunCache);
       placeRing(orbitEl,  sunVX, sunVY, ringRadius,  orbitACache);
@@ -503,8 +486,11 @@ export function useSunAnimation() {
       starElA.style.width  = `${ph.width}px`;
       starElA.style.height = `${ph.height}px`;
 
+      const titleEm = parseFloat(getComputedStyle(placeholder).fontSize);
+      const starAX = starVX + STAR_A_OFFSET_EM.x * titleEm;
+      const starAY = starVY + STAR_A_OFFSET_EM.y * titleEm;
       const baseRadius = Math.hypot(sunStartVX - starVX, sunStartVY - starVY);
-      ringRadius  = baseRadius * RING_A_SCALE;
+      ringRadius  = Math.hypot(sunStartVX - starAX, sunStartVY - starAY);
       ringRadiusB = Math.min(baseRadius * RING_B_SCALE, vh * RING_B_MAX_VH);
 
       // Set the sun rings' stroke widths so they render at ~1px regardless of
@@ -533,47 +519,45 @@ export function useSunAnimation() {
         // animationend handler above strips it when the burn resolves.
         worksOrbit?.classList.add('sun-fade-in');
 
-        if (!document.documentElement.classList.contains('no-entry-anim')) {
-          // r=99 matches the outer ring's resting radius, so the inner ring
-          // first appears flush with the outer trace and then collapses
-          // inward to its rendered r=72. setAttribute on `r` is unambiguous
-          // — the radius shrinks symmetrically around (cx, cy) — so we drive
-          // it with rAF rather than risk a browser that doesn't tween the
-          // CSS `r` property reliably.
-          const SHRINK_DELAY = 1400;
-          const SHRINK_DUR   = 900;
-          const FADE_DUR     = 250;
-          const R_START      = 99;
-          const R_END        = 72;
-          // cubic-bezier(0.22, 1, 0.36, 1) flattens fast and lingers — the
-          // closest unit-cost curve is easeOutQuint (1-(1-t)^5).
-          const easeOut = (t: number) => 1 - Math.pow(1 - t, 5);
+        // r=99 matches the outer ring's resting radius, so the inner ring
+        // first appears flush with the outer trace and then collapses
+        // inward to its rendered r=72. setAttribute on `r` is unambiguous
+        // — the radius shrinks symmetrically around (cx, cy) — so we drive
+        // it with rAF rather than risk a browser that doesn't tween the
+        // CSS `r` property reliably.
+        const SHRINK_DELAY = 1400;
+        const SHRINK_DUR   = 900;
+        const FADE_DUR     = 250;
+        const R_START      = 99;
+        const R_END        = 72;
+        // cubic-bezier(0.22, 1, 0.36, 1) flattens fast and lingers — the
+        // closest unit-cost curve is easeOutQuint (1-(1-t)^5).
+        const easeOut = (t: number) => 1 - Math.pow(1 - t, 5);
 
-          const animStart = performance.now() + SHRINK_DELAY;
-          const tickInner = () => {
-            const elapsed = performance.now() - animStart;
-            if (elapsed < 0) {
-              innerRingRaf = requestAnimationFrame(tickInner);
-              return;
-            }
-            const shrinkT = Math.min(1, elapsed / SHRINK_DUR);
-            const fadeT   = Math.min(1, elapsed / FADE_DUR);
-            const r = R_START + (R_END - R_START) * easeOut(shrinkT);
-            sunRingInner.setAttribute('r', String(r));
-            sunRingInner.style.opacity = String(fadeT);
-            if (shrinkT < 1) innerRingRaf = requestAnimationFrame(tickInner);
-          };
-          // Seed initial state so the very first paint has the ring at r=99
-          // (otherwise the SVG attribute r=72 paints briefly before the
-          // first rAF tick fires).
-          sunRingInner.setAttribute('r', String(R_START));
-          sunRingInner.style.opacity = '0';
-          innerRingRaf = requestAnimationFrame(tickInner);
-        }
+        const animStart = performance.now() + SHRINK_DELAY;
+        const tickInner = () => {
+          const elapsed = performance.now() - animStart;
+          if (elapsed < 0) {
+            innerRingRaf = requestAnimationFrame(tickInner);
+            return;
+          }
+          const shrinkT = Math.min(1, elapsed / SHRINK_DUR);
+          const fadeT   = Math.min(1, elapsed / FADE_DUR);
+          const r = R_START + (R_END - R_START) * easeOut(shrinkT);
+          sunRingInner.setAttribute('r', String(r));
+          sunRingInner.style.opacity = String(fadeT);
+          if (shrinkT < 1) innerRingRaf = requestAnimationFrame(tickInner);
+        };
+        // Seed initial state so the very first paint has the ring at r=99
+        // (otherwise the SVG attribute r=72 paints briefly before the
+        // first rAF tick fires).
+        sunRingInner.setAttribute('r', String(R_START));
+        sunRingInner.style.opacity = '0';
+        innerRingRaf = requestAnimationFrame(tickInner);
       }
 
-      // Star A starts where the placeholder is (below sun)
-      startAngleA = Math.atan2(starVY - sunStartVY, starVX - sunStartVX);
+      // Star A starts in the title's gap, clear of the K
+      startAngleA = Math.atan2(starAY - sunStartVY, starAX - sunStartVX);
       // The works train's lead body starts mirrored above (negate Y delta),
       // offset further toward the top — star B's old opening position.
       workPhase = Math.atan2(-(starVY - sunStartVY), starVX - sunStartVX) + WORK_START_OFFSET;
@@ -581,32 +565,6 @@ export function useSunAnimation() {
       // Update ring stroke widths so they look the same weight visually
       orbitRing.setAttribute('stroke-width',  String(SHELL_BASE / ringRadius));
       orbitRingB.setAttribute('stroke-width', String(SHELL_BASE / ringRadiusB));
-
-      // Rotate each circle so its path origin (path-pos 100) sits at the top
-      // of the visible arc. Then the dashoffset animation (going from -100
-      // toward 0) reveals pixels backward in path direction = CCW visually =
-      // top→bottom on the visible left arc, and reveals them immediately
-      // instead of after a long off-screen warmup. Visible-end dashoffset
-      // tells the keyframe at which point the on-screen drawing is finished.
-      const visA = computeRingVisibility(sunStartVX, sunStartVY, ringRadius,  vw, vh);
-      const visB = computeRingVisibility(sunStartVX, sunStartVY, ringRadiusB, vw, vh);
-      if (visA.topAngle !== null) {
-        orbitRing.setAttribute('transform', `rotate(${(visA.topAngle * 180) / Math.PI})`);
-      }
-      if (visB.topAngle !== null) {
-        orbitRingB.setAttribute('transform', `rotate(${(visB.topAngle * 180) / Math.PI})`);
-      }
-      // Cap ring B's drawn arc at ring A's visible fraction so the two arcs
-      // subtend the same angular slice. The smaller ring naturally fits more
-      // of its full circle inside the viewport (so visB.visibleFraction tends
-      // to be larger than visA's), which makes it read as a much tighter,
-      // more curved arc than ring A — visually mismatched. Matching the
-      // angular span keeps both arcs reading as the "same shape" at
-      // different scales.
-      const fracA = visA.visibleFraction;
-      const fracB = Math.min(visB.visibleFraction, fracA);
-      orbitRing.style.setProperty('--ring-visible-end',  String(-100 + 100 * fracA));
-      orbitRingB.style.setProperty('--ring-visible-end', String(-100 + 100 * fracB));
 
       // The animation ends earlier than the bottom of the document so the sun
       // parks next to the email link while the contact section is in view.
@@ -715,6 +673,20 @@ export function useSunAnimation() {
       displayedProgress = p;
       displayedRunway = q;
       apply(p, q);
+
+      // Rotate each circle so its path origin (path-pos 100) sits where the
+      // on-screen arc begins, measured from wherever the page opened — the
+      // hero, a section hash, or a restored reload all trace from the sun's
+      // CURRENT pose. The dashoffset animation (-100 toward 0) then reveals
+      // pixels backward in path direction, starting on screen immediately
+      // instead of after an off-screen warmup. Entrance only: re-rotating on
+      // a later init would jump an arc that's mid-draw.
+      if (!isResize) {
+        const startA = computeRingDrawStart(sunNowX, sunNowY, ringRadius,  vw, vh);
+        const startB = computeRingDrawStart(sunNowX, sunNowY, ringRadiusB, vw, vh);
+        if (startA !== null) orbitRing.setAttribute('transform', `rotate(${startA / RAD})`);
+        if (startB !== null) orbitRingB.setAttribute('transform', `rotate(${startB / RAD})`);
+      }
       if (isResize) startLoop();
     };
 

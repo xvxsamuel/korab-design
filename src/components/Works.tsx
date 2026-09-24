@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import WorkStar from './WorkStar';
 import StarFlat from '../assets/starflat.svg?react';
-import Cogs from './Cogs';
 
 type Project = {
   id: string;
@@ -258,7 +257,6 @@ export default function Works() {
                 <dd>{p.tags}</dd>
               </div>
             </dl>
-            <Cogs />
           </div>
           <figure className="work-panel-media">
             <img src={p.image} alt="" loading="lazy" decoding="async" />

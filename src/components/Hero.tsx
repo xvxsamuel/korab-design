@@ -50,8 +50,6 @@ function thresholdTable(ones: number) {
 
 export default function Hero() {
   const [entering, setEntering] = useState<boolean>(() => {
-    if (typeof document === 'undefined') return false;
-    if (document.documentElement.classList.contains('no-entry-anim')) return false;
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
     return true;
   });

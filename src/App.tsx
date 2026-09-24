@@ -9,11 +9,17 @@ import About from './components/About';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
 import { useSunAnimation } from './hooks/useSunAnimation';
+import { useEntryScroll, useSectionHash } from './hooks/useEntryScroll';
 
 const sectionIds = ['home', 'about', 'works', 'contact'] as const;
 
 export default function App() {
-  const [active, setActive] = useState<string>('home');
+  // Seeded from the URL so the first render doesn't clear a section hash
+  // before the observer reports where the page actually opened.
+  const [active, setActive] = useState<string>(() => {
+    const hash = window.location.hash.slice(1);
+    return (sectionIds as readonly string[]).includes(hash) ? hash : 'home';
+  });
   // Initialize from current scrollY so the first paint already reflects the
   // right state (no flash of the cue when refreshing partway down the page).
   const [cueHidden, setCueHidden] = useState<boolean>(
@@ -50,6 +56,10 @@ export default function App() {
     };
   }, []);
 
+  // Declared ahead of the orrery: its layout effect must scroll into place
+  // before useSunAnimation measures the starting pose.
+  useEntryScroll(sectionIds);
+  useSectionHash(active);
   useSunAnimation();
 
   return (
@@ -83,6 +93,14 @@ export default function App() {
             </feComponentTransfer>
             <feFlood floodColor="#d79554" result="ink" />
             <feComposite in="ink" in2="thresh" operator="in" />
+          </filter>
+          {/* The works train's bloom: the same 90% alpha cut, but keeping
+              the source colours — a presented body's inlay, icon and label
+              aren't accent, and a flood would snap them when it lifts. */}
+          <filter id="inkThreshold" x="-25%" y="-25%" width="150%" height="150%" colorInterpolationFilters="sRGB">
+            <feComponentTransfer>
+              <feFuncA type="discrete" tableValues="0 0 0 0 0 0 0 0 0 1" />
+            </feComponentTransfer>
           </filter>
         </defs>
       </svg>

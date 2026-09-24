@@ -34,11 +34,48 @@
      18 keeps the widest margin of the readable sizes. Change it only in
      whole pixels, and re-check the i's. */
   --body-text: 18px;
+  /* Display type (DeFonte) scales on one continuous line per size, from its
+     phone size at 375px to its desktop size at 1440px, clamped at both ends.
+     No breakpoint overrides: a size stepping at 900px made tablets carry
+     bigger headings than small laptops. The rem term keeps browser zoom and
+     the user's default font size in play, which a bare vw ignores. Amiamie
+     sizes stay whole fixed pixels (see --body-text above). */
+  --fs-hero:     clamp(4rem,     1.775rem + 10.028vw, 12.5rem);
+  --fs-title:    clamp(3.5rem,   2.532rem + 4.131vw,  6.25rem);
+  --fs-panel:    clamp(1.75rem,  1.225rem + 2.238vw,  3.25rem);
+  --fs-lead:     clamp(1.625rem, 1.229rem + 1.69vw,   2.75rem);
+  --fs-email:    clamp(1.375rem, 1.078rem + 1.403vw,  2.5rem);
+  --fs-workname: clamp(1.25rem,  1.088rem + 0.691vw,  1.75rem);
+  --fs-item:     clamp(1.25rem,  1.12rem + 0.556vw,   1.625rem);
   --gutter:   56px;
   --sun-size: 46vmin;
 }
 
 * { box-sizing: border-box; }
+
+/* A small, continuously meshed cog cluster on the site's peach background. */
+.site-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: var(--accent);
+  transition: opacity 180ms ease;
+}
+.site-loader.is-leaving { opacity: 0; }
+.site-loader-mark {
+  animation: loader-appear 160ms ease 120ms both;
+}
+@keyframes loader-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-loader { transition: none; }
+  .site-loader-mark { animation: none; }
+}
 
 html,
 body {
@@ -424,21 +461,22 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   filter: blur(var(--star-blur)) url(#starThreshold);
   animation: star-ink-bloom 1.8s cubic-bezier(0.32, 0, 0.67, 0) both;
 }
-/* The works train's entrance — a soft fade-and-focus, deliberately without
-   the title's threshold filter (four dense paths under an animated SVG
-   reference filter is enough concurrent rasterisation to hang a weak GPU).
-   It animates the GEAR WRAPPER, not a face: the faces' idle gear-spin must
-   start at mount and never be displaced, or the two faces end up
-   permanently out of rotational phase with each other (an animation on a
-   face REPLACES its spin; on the wrapper they compose). The hook strips the
-   class on animationend so the blur filter doesn't outlive the entrance. */
-.works-orbit.sun-fade-in .work-body-gear {
-  filter: blur(var(--star-blur));
+/* The works train inks in exactly like star A, through #inkThreshold (the
+   same cut without the accent flood, so a presented body's inlay, icon and
+   label keep their own colours). It animates the MARK and LABEL wrappers,
+   never the star itself: the star's idle spin and scroll-driven rotate must
+   never be displaced (an animation on it would REPLACE the spin; on an
+   ancestor they compose). The label is filtered on its own box because it
+   hangs outside the mark's filter region. The hook strips the class on
+   animationend so the filter doesn't outlive the entrance. */
+.works-orbit.sun-fade-in .work-body-mark,
+.works-orbit.sun-fade-in .work-body-label {
+  filter: blur(var(--star-blur)) url(#inkThreshold);
   animation: work-star-bloom 1.8s cubic-bezier(0.32, 0, 0.67, 0) 0.15s both;
 }
 @keyframes work-star-bloom {
-  from { --star-blur: 13px; opacity: 0; }
-  to   { --star-blur: 0px;  opacity: 1; }
+  from { --star-blur: 13px; }
+  to   { --star-blur: 0px; }
 }
 @keyframes star-ink-bloom {
   from { --star-blur: 13px; }
@@ -460,40 +498,6 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
 }
 @keyframes brand-spin { to { transform: rotate(360deg); } }
 
-/* Skip on-mount entry animations when the page loads partway scrolled. The
-   `no-entry-anim` class is set on <html> from main.tsx before React mounts.
-   Each new entry animation should add its own override here so it follows
-   the same pattern (snap to final state instead of playing). */
-html.no-entry-anim .sun-orbit-ring {
-  stroke-dashoffset: 0 !important;
-  animation: none !important;
-}
-html.no-entry-anim .sun-ring-outer {
-  stroke-dashoffset: 0 !important;
-  animation: none !important;
-}
-html.no-entry-anim .sun-ring-inner {
-  r: 72 !important;
-  opacity: 1 !important;
-  animation: none !important;
-}
-html.no-entry-anim .sun-trace,
-html.no-entry-anim .sun-orbit,
-html.no-entry-anim .star-a {
-  opacity: 1 !important;
-  animation: none !important;
-}
-html.no-entry-anim .star-a {
-  filter: none !important;
-}
-html.no-entry-anim .works-orbit.sun-fade-in .work-body-gear {
-  animation: none !important;
-  filter: none !important;
-  opacity: 1;
-}
-html.no-entry-anim .hero-name .row {
-  filter: none !important;
-}
 .ink-noise-defs {
   position: absolute;
   width: 0;
@@ -585,7 +589,7 @@ section {
 .hero-name {
   font-family: var(--display);
   font-weight: 500;
-  font-size: clamp(80px, 12vw, 200px);
+  font-size: var(--fs-hero);
   line-height: 0.6;
   /* No-op on flex children, but kept for non-split-letter fallback. Spacing
      between letters is actually driven by the row's gap + .hero-letter margin. */
@@ -657,7 +661,7 @@ section {
 .section-title {
   font-family: var(--display);
   font-weight: 500;
-  font-size: clamp(56px, 7vw, 100px);
+  font-size: var(--fs-title);
   line-height: 1;
   letter-spacing: -0.015em;
   margin: 0 0 80px;
@@ -826,7 +830,7 @@ section {
 .work-body-name {
   font-family: var(--display);
   font-weight: 500;
-  font-size: clamp(20px, 1.9vw, 28px);
+  font-size: var(--fs-workname);
   letter-spacing: -0.01em;
   transition: color 0.3s ease;
 }
@@ -957,15 +961,13 @@ html.no-orbit .works-grid { display: block; }
   .work-body-star { animation: none; }
 }
 
-/* Cog cluster in the project panel: A drives B (down-right) and C
-   (down-left); B and C never touch, so the chain stays open. */
+/* Equal-size cogs keep the same tooth pitch as the cluster scales. */
 .cogs {
   --gear-period: 26s;
   position: relative;
-  margin: auto 0 0;
+  width: clamp(144px, 24vmin, 180px);
   pointer-events: none;
   color: var(--accent);
-  opacity: 0.85;
 }
 .cog { position: absolute; display: block; }
 .cog svg { display: block; width: 100%; height: 100%; }
@@ -1652,7 +1654,7 @@ footer.is-grown .bg-flower-star {
 .work-panel-title {
   font-family: var(--display);
   font-weight: 500;
-  font-size: clamp(28px, 3.6vw, 52px);
+  font-size: var(--fs-panel);
   line-height: 1;
   letter-spacing: -0.01em;
   margin: 0 0 clamp(12px, 2vh, 24px);
@@ -1746,7 +1748,7 @@ footer.is-grown .bg-flower-star {
 .about-lead {
   font-family: var(--display);
   font-weight: 500;
-  font-size: clamp(26px, 3.1vw, 44px);
+  font-size: var(--fs-lead);
   letter-spacing: -0.015em;
   line-height: 1.08;
   color: var(--ink);
@@ -1833,7 +1835,7 @@ footer.is-grown .bg-flower-star {
   gap: 14px;
   font-family: var(--display);
   font-weight: 500;
-  font-size: clamp(20px, 1.8vw, 26px);
+  font-size: var(--fs-item);
   letter-spacing: -0.005em;
   line-height: 1;
   color: var(--ink);
@@ -1902,7 +1904,7 @@ html.no-orbit .ending-runway { display: none; }
   align-items: center;
   font-family: var(--display);
   font-weight: 500;
-  font-size: clamp(24px, 2.6vw, 40px);
+  font-size: var(--fs-email);
   letter-spacing: -0.01em;
   color: var(--ink);
   padding: 0.32em 0.7em;
@@ -2199,11 +2201,8 @@ footer {
   .nav-links { gap: 20px; font-size: 15px; margin: 0 auto; }
   .brand-orbit { width: 32px; height: 32px; }
   .sun-trace { max-width: 320px; max-height: 320px; }
-  .hero-name { font-size: clamp(72px, 16vw, 140px); }
   .hero-name .row.row2 { padding-left: 1.25em; }
-  .hero-meta { font-size: 12px; }
   .section-title {
-    font-size: clamp(56px, 12vw, 90px);
     margin-bottom: 40px;
     padding-top: 100px;
   }
@@ -2216,7 +2215,6 @@ footer {
   .about-lead { max-width: none; }
   .about-bio { margin-top: 0; }
   .contact-email {
-    font-size: clamp(22px, 6vw, 36px);
     /* Cap so the hover-expanded pill (chevron + extra padding) stays inset from
        the viewport's right edge. Width = section content box + the 0.7em the
        pill overhangs to the left, so the right edge lands at viewport - gutter. */
@@ -2234,7 +2232,6 @@ footer {
 }
 
 @media (max-width: 480px) {
-  .hero-name { font-size: clamp(60px, 18vw, 120px); }
   .hero-name .row.row2 { padding-left: 0.7em; }
 }
 

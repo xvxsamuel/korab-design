@@ -1,13 +1,11 @@
 import Star from '../assets/star.svg?react';
 import { layoutGearTrain } from '../lib/gears';
 
-// Three marks meshed into a shallow diagonal chain descending to the right,
-// sat on the bottom edge of the panel's text column. An open chain, not a
-// closed loop: three gears meshed in a ring would over-constrain the phases
-// and seize.
-const CLUSTER = layoutGearTrain(104, [
-  { bearing: 32 },
-  { bearing: 32 },
+// A gently tilted, open cluster: the staggered outer cogs balance the
+// centre cog while staying apart so the train can turn continuously.
+const CLUSTER = layoutGearTrain(72, [
+  { bearing: 165, from: 0 },
+  { bearing: 45, from: 0 },
 ]);
 
 export default function Cogs() {
@@ -15,17 +13,17 @@ export default function Cogs() {
     <div
       className="cogs"
       aria-hidden="true"
-      style={{ width: CLUSTER.width, height: CLUSTER.height }}
+      style={{ aspectRatio: `${CLUSTER.width} / ${CLUSTER.height}` }}
     >
       {CLUSTER.gears.map((g, i) => (
         <span
           key={i}
           className="cog"
           style={{
-            left: g.left,
-            top: g.top,
-            width: g.size,
-            height: g.size,
+            left: `${g.left / CLUSTER.width * 100}%`,
+            top: `${g.top / CLUSTER.height * 100}%`,
+            width: `${g.size / CLUSTER.width * 100}%`,
+            height: `${g.size / CLUSTER.height * 100}%`,
             transform: `rotate(${g.phase}deg)`,
           }}
         >
