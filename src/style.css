@@ -62,15 +62,19 @@
   place-items: center;
   background: var(--bg);
   color: var(--accent);
-  transition: opacity 180ms ease;
+  /* Leaves by closing to a point on the cogs: the site is drawn in from
+     every edge at once, never faded up. */
+  clip-path: circle(75% at 50% 50%);
+  transition: clip-path 280ms cubic-bezier(0.55, 0, 0.45, 1);
 }
-.site-loader.is-leaving { opacity: 0; }
+.site-loader.is-leaving { clip-path: circle(0% at 50% 50%); }
+/* The cogs grow out of the centre rather than fading in. */
 .site-loader-mark {
-  animation: loader-appear 160ms ease 120ms both;
+  animation: loader-appear 260ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
 }
 @keyframes loader-appear {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { clip-path: circle(0% at 50% 50%); }
+  to   { clip-path: circle(71% at 50% 50%); }
 }
 @media (prefers-reduced-motion: reduce) {
   .site-loader { transition: none; }
@@ -220,16 +224,17 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   line-height: 1.2;
   pointer-events: auto;
 }
-/* original label — slides down & fades out on hover */
+/* original label — slides down out through the link's bottom edge on hover.
+   Nothing on the site fades: the link's overflow is the mask, so labels
+   enter and leave across an edge instead. */
 .nav-links a .nav-label-base {
   display: block;
   position: relative;
   z-index: 1;
-  transition: transform 0.32s var(--ease-soft), opacity 0.25s ease;
+  transition: transform 0.32s var(--ease-soft);
 }
 .nav-links a:hover .nav-label-base {
   transform: translateY(110%);
-  opacity: 0;
 }
 
 /* DeFonte label — slides in from above on hover */
@@ -244,29 +249,31 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   color: var(--ink);
   z-index: 1;
   transform: translateY(-110%);
-  opacity: 0;
-  transition: transform 0.32s var(--ease-soft), opacity 0.25s ease;
+  transition: transform 0.32s var(--ease-soft);
 }
 .nav-links a:hover .nav-label-alt {
   transform: translateY(0);
-  opacity: 1;
 }
 
-/* contact button in nav */
+/* contact button in nav. The ink fill rises from the pill's bottom edge
+   (a sized background layer, clipped by the pill's radius) rather than
+   cross-fading in, and drains back down on unhover. */
 .nav-contact {
   border: 1px solid var(--ink);
   border-radius: 999px;
-  transition: background 0.25s ease, border-color 0.25s ease;
+  background: linear-gradient(var(--ink), var(--ink)) no-repeat bottom / 100% 0%;
+  transition: background-size 0.3s var(--ease-soft);
 }
 .nav-contact:hover {
-  background: var(--ink);
-  border-color: var(--ink);
+  background-size: 100% 100%;
 }
 
-/* override the generic slide-up for the contact base label */
-.nav-contact:hover .nav-label-base {
+/* The contact row itself stays put — its chars leave one by one instead.
+   Must outrank .nav-links a:hover .nav-label-base (which slides the other
+   labels down); a weaker selector let the row drop while the chars rose,
+   so they cancelled out and stayed half-visible in the pill. */
+.nav-links a.nav-contact:hover .nav-label-base {
   transform: none;
-  opacity: 1;
 }
 
 /* each character staggers out diagonally */
@@ -276,14 +283,13 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
 }
 .nav-contact-char {
   display: inline-block;
-  transition:
-    transform 0.22s var(--ease-soft),
-    opacity   0.18s ease;
+  transition: transform 0.22s var(--ease-soft);
   transition-delay: calc(var(--i) * 28ms);
 }
+/* Clear of the pill's top edge (the link masks it): the 1.2em line box
+   plus the pill's top padding and border, with room for the tilt. */
 .nav-contact:hover .nav-contact-char {
-  transform: translateY(-60%) rotate(-12deg);
-  opacity: 0;
+  transform: translateY(-2em) rotate(-12deg);
   color: var(--bg);
   /* Hover-in: zero delay so all chars leave together. Hover-out falls back
      to the base rule's staggered delay, so chars return one-by-one. */
@@ -295,12 +301,18 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   font-family: var(--display);
   font-weight: 500;
   white-space: nowrap;
-  transition: transform 0.32s var(--ease-soft), opacity 0.28s ease;
+  transition: transform 0.32s var(--ease-soft);
   transition-delay: 0.04s;
 }
-.nav-contact:hover .nav-contact-alt {
+/* Enters from BELOW, the same way the chars leave (up): the two labels
+   travel together like a belt instead of crossing mid-pill — with no fade
+   to hide it, a crossing reads as both words overprinted. Beats the
+   generic from-above start on .nav-links a .nav-label-alt. */
+.nav-links a.nav-contact .nav-contact-alt {
+  transform: translateY(110%);
+}
+.nav-links a.nav-contact:hover .nav-contact-alt {
   transform: translateY(0);
-  opacity: 1;
   transition-delay: 0.08s;
   color: var(--bg);
 }
@@ -541,11 +553,14 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   transform: translateX(-50%);
   z-index: 6;
   pointer-events: none;
-  opacity: 1;
-  transition: opacity 0.6s ease;
+  /* Wipes away top-down once scrolling starts and draws back down on
+     return — the chevron is erased along its own direction of travel. The
+     outset keeps the rotated border's corners inside the clip. */
+  clip-path: inset(-4px);
+  transition: clip-path 0.6s var(--ease-soft);
 }
 .scroll-cue.hidden {
-  opacity: 0;
+  clip-path: inset(calc(100% + 4px) -4px -4px -4px);
 }
 .scroll-cue .arrow {
   width: 11px; height: 11px;
@@ -782,15 +797,21 @@ section {
   transform: translate(-50%, -50%) scale(clamp(0, var(--in, 0), 1));
 }
 .work-body-label {
-  /* Gated by the morph, weighted by the menu focus. The focus factor
-     saturates at ~0.6 rather than 1.0, which turns the full-colour moment
-     from a knife-edge at the exact presented point into a plateau about
-     ±13° of arc wide — the fades in and out sit further apart and the text
-     holds full strength between them. */
-  opacity: calc(
-    clamp(0, (var(--in, 0) - 0.35) * 1.8, 1) *
-    (0.3 + 0.7 * clamp(0, var(--focus, 0) * 2, 1))
-  );
+  /* Gated by the morph, weighted by the menu focus. The gate WIPES the
+     label in from its left edge (and back out) as the body opens — no
+     fade. The focus weight is a tone, not a transparency: the text mixes
+     toward the page colour. The focus factor saturates at ~0.6 rather than
+     1.0, which turns the full-tone moment from a knife-edge at the exact
+     presented point into a plateau about ±13° of arc wide. */
+  --reveal: clamp(0, (var(--in, 0) - 0.35) * 1.8, 1);
+  --weight: calc((0.3 + 0.7 * clamp(0, var(--focus, 0) * 2, 1)) * 100%);
+  clip-path: inset(-0.4em calc((1 - var(--reveal)) * 100%) -0.4em -0.4em);
+}
+.work-body-label .work-body-name {
+  color: color-mix(in srgb, var(--ink) var(--weight), var(--bg));
+}
+.work-body-label .work-body-year {
+  color: color-mix(in srgb, var(--ink-soft) var(--weight), var(--bg));
 }
 .work-body-icon img {
   display: block;
@@ -832,7 +853,6 @@ section {
   font-weight: 500;
   font-size: var(--fs-workname);
   letter-spacing: -0.01em;
-  transition: color 0.3s ease;
 }
 .work-body-year {
   font-family: var(--body);
@@ -974,16 +994,25 @@ html.no-orbit .works-grid { display: block; }
 .bg-flower {
   position: absolute;
   bottom: 0;
+  left: var(--left);
   display: block;
   color: var(--accent);
+}
+/* Snap each plant to a whole pixel. The stem is a 1px hairline at the
+   box's x; left fractional, a cut's clip-path animation (which gives the
+   stem its own compositing layer) resampled it across two pixels and the
+   stem visibly thickened the moment it was clicked. */
+@supports (left: round(1%, 1px)) {
+  .bg-flower { left: round(var(--left), 1px); }
 }
 .bg-flower-stem {
   position: absolute;
   left: 50%;
   bottom: 0;
   /* One continuous hairline reaches into the rotated bloom; a separate
-     segment inside its scaled wrapper rasterised at a different thickness. */
-  top: calc(var(--star-size, 18px) * -0.17);
+     segment inside its scaled wrapper rasterised at a different thickness.
+     --bloom-scale is set only on a bloom a cut froze part-grown. */
+  top: calc(var(--star-size, 18px) * var(--bloom-scale, 1) * -0.17);
   /* 1px hairline, deliberately NOT centred: translateX(-50%) of a 1px box
      is a half-pixel offset, which parked the stem's edges exactly on pixel
      boundaries — whether it rasterised at all then depended on the
@@ -1007,7 +1036,6 @@ footer.is-grown .bg-flower-stem {
   position: absolute;
   display: block;
   overflow: visible;
-  opacity: 0;
   z-index: 2;
 }
 /* The leaf svg lives inside a span wrapper (the wrapper is what animates,
@@ -1049,10 +1077,10 @@ footer.is-grown .bg-flower-leaf--left {
   animation: leaf-grow-left 0.5s cubic-bezier(0.22, 1, 0.36, 1) var(--leaf-delay, 0.3s) forwards;
 }
 @keyframes leaf-grow-right {
-  to { opacity: 1; transform: rotate(-30deg) scale(1); }
+  to { transform: rotate(-30deg) scale(1); }
 }
 @keyframes leaf-grow-left {
-  to { opacity: 1; transform: rotate(30deg) scale(1); }
+  to { transform: rotate(30deg) scale(1); }
 }
 .bg-flower-star {
   position: absolute;
@@ -1061,10 +1089,10 @@ footer.is-grown .bg-flower-leaf--left {
   width: var(--star-size, 18px);
   height: var(--star-size, 18px);
   color: var(--accent);
-  transform: translate(-50%, -99%) scale(0.15);
+  /* Grows out of the stem tip from nothing — no opacity ramp. */
+  transform: translate(-50%, -99%) scale(0);
   transform-origin: 50% 99%;
   display: block;
-  opacity: 0;
 }
 .bg-flower-star-svg {
   position: relative;
@@ -1079,9 +1107,8 @@ footer.is-grown .bg-flower-star {
   animation: star-bloom var(--grow, 2s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 @keyframes star-bloom {
-  0%   { top: 100%; transform: translate(-50%, -99%) scale(0.15); opacity: 0; }
-  15%  { opacity: 1; }
-  100% { top: 0%;   transform: translate(-50%, -99%) scale(1);    opacity: 1; }
+  0%   { top: 100%; transform: translate(-50%, -99%) scale(0); }
+  100% { top: 0%;   transform: translate(-50%, -99%) scale(1); }
 }
 
 /* Hit-targets for the flower easter egg: the visuals themselves. The bloom
@@ -1115,39 +1142,89 @@ footer.is-grown .bg-flower-star {
   position: absolute;
   inset: -5px;
 }
-/* Cuts are accepted only while the plant is idle, and never on a falling
-   clone — the same rule the component's state machine enforces in JS. */
-.bg-flower.is-cutting .bg-flower-hit,
-.bg-flower.is-regrowing .bg-flower-hit,
-.bg-flower-cut-top .bg-flower-hit,
-.bg-flower-leaf-fall .bg-flower-hit {
+/* Cuts are refused only on a felled plant (its stump is sinking away) and on
+   anything falling. The rest of the time a cut lands wherever it's aimed,
+   growing or not (see the notes in BackgroundFlowers.tsx). */
+.bg-flower.is-felling .bg-flower-hit {
   pointer-events: none;
 }
 
-/* Kept cuts (head, or stem within the top 30%): the standing plant neither
-   fades nor regenerates — only the sweep runs on the main body, holding the
-   below-line region. */
-.bg-flower.is-cutting--keep.is-cutting--from-left .bg-flower-main {
+/* Easter egg: clicking a flower drives a knife-style cut. The blade enters
+   from a random side and sweeps across at a slight random tilt through the
+   click point. Only the stem and bloom are cut — on the standing plant they
+   sit inside two wrappers:
+     .bg-flower-clip   every earlier cut, folded into one static polygon
+                       (the region below all their lines, built in JS);
+     .bg-flower-sweep  the latest cut, sweeping in, then holding.
+   Leaves live outside both, so a cut line never slices one: each leaf goes
+   whole with the falling piece or stays whole on the stump.
+   The severed part is a separate snapshot (.bg-flower-piece) that reveals
+   in step with the sweep, then drops. --cut-left / --cut-right are the cut
+   line's px Y at the polygons' left and right edges (±200px), computed in
+   JS so the line crosses the click point. */
+.bg-flower-main {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.bg-flower-clip,
+.bg-flower-sweep,
+.bg-flower-reveal {
+  position: absolute;
+  inset: 0;
+}
+/* Two identical keyframe sets per side, alternated by cut parity: the sweep
+   wrapper stays mounted (remounting it would remount the stem and bloom and
+   replay their growth), so only a changed animation-name restarts it. */
+.bg-flower-sweep--from-left.bg-flower-sweep--a {
   animation: flower-cut-sweep-from-left 160ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
 }
-.bg-flower.is-cutting--keep.is-cutting--from-right .bg-flower-main {
+.bg-flower-sweep--from-left.bg-flower-sweep--b {
+  animation: flower-cut-sweep-from-left-b 160ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+.bg-flower-sweep--from-right.bg-flower-sweep--a {
   animation: flower-cut-sweep-from-right 160ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
 }
-/* Regrowth from the stump. After a kept cut the plant re-randomises its
-   height (the box's height changes) and GROWS the missing stretch the same
-   way the intro grows the whole stem: scaleY on the stem, the bloom riding
-   the tip. --regrow-from is the stump as a fraction of the new height
-   (set by the component), so the stem starts already standing at the
-   stump and the bloom starts at its top, and both climb to the new full
-   height together. The remounted stem/bloom (epoch key) are what replay
-   these animations; --regrow is the duration. !important beats the
-   higher-specificity intro-growth rules (footer.is-grown ...). */
-/* Keyed on the REGROWN parts themselves (data-regrown, set on the remounted
-   stem/bloom), not on the plant's transient .is-regrowing phase: an
-   animation that vanishes with its class takes its fill-mode with it, and
-   the remounted parts never ran the intro growth — they'd snap back to
-   scaleY(0) / bloom-at-base the moment the phase cleared. Left on the
-   element, it plays once and holds its end state for good. */
+.bg-flower-sweep--from-right.bg-flower-sweep--b {
+  animation: flower-cut-sweep-from-right-b 160ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+/* A deep cut fells the plant: once the top is down, the stump sinks back
+   into the ground — its leaves fold back to their base, then the stem is
+   drawn down from the top (a clip edge travelling to the box bottom) — and
+   the component swaps in a freshly randomised flower. The stem below the
+   footer edge (the bleed) stays; the new flower continues it. */
+.bg-flower.is-felling .bg-flower-clip {
+  animation: flower-stump-retract 320ms cubic-bezier(0.55, 0, 1, 0.45) 660ms forwards;
+}
+.bg-flower.is-felling .bg-flower-main .bg-flower-leaf--right {
+  animation: leaf-fold-right 200ms cubic-bezier(0.55, 0, 1, 0.45) 620ms both;
+}
+.bg-flower.is-felling .bg-flower-main .bg-flower-leaf--left {
+  animation: leaf-fold-left 200ms cubic-bezier(0.55, 0, 1, 0.45) 620ms both;
+}
+@keyframes flower-stump-retract {
+  from { clip-path: polygon(-200px 0%, 200px 0%, 200px 9999px, -200px 9999px); }
+  to   { clip-path: polygon(-200px 100%, 200px 100%, 200px 9999px, -200px 9999px); }
+}
+@keyframes leaf-fold-right {
+  from { transform: rotate(-30deg) scale(1); }
+  to   { transform: rotate(-30deg) scale(0); }
+}
+@keyframes leaf-fold-left {
+  from { transform: rotate(30deg) scale(1); }
+  to   { transform: rotate(30deg) scale(0); }
+}
+
+/* Regrowth from the stump. After a cut takes the whole head off, the plant
+   re-randomises its height (the box's height changes) and GROWS the missing
+   stretch the same way the intro grows the whole stem: scaleY on the stem,
+   the bloom riding the tip. --regrow-from is the stump as a fraction of the
+   new height (set by the component), so the stem starts already standing at
+   the stump and the bloom starts at its top, and both climb to the new full
+   height together. Keyed on the REGROWN parts themselves (data-regrown, set
+   on the remounted stem/bloom), so the animation plays once and holds its
+   end state for good. !important beats the higher-specificity intro-growth
+   rules (footer.is-grown ...). */
 .bg-flower-main .bg-flower-stem[data-regrown] {
   animation: flower-regrow-stem var(--regrow, 1.4s) cubic-bezier(0.22, 1, 0.36, 1) both !important;
 }
@@ -1159,14 +1236,21 @@ footer.is-grown .bg-flower-star {
   to   { transform: scaleY(1); }
 }
 @keyframes flower-regrow-bloom {
-  0%   { top: calc((1 - var(--regrow-from, 0)) * 100%); transform: translate(-50%, -99%) scale(0.15); opacity: 0; }
-  15%  { opacity: 1; }
-  100% { top: 0%; transform: translate(-50%, -99%) scale(1); opacity: 1; }
+  0%   { top: calc((1 - var(--regrow-from, 0)) * 100%); transform: translate(-50%, -99%) scale(0); }
+  100% { top: 0%; transform: translate(-50%, -99%) scale(1); }
 }
-/* Leaves the regrown stretch sprouts: epoch > 0 leaves have --leaf-delay
-   0s and simply play their normal grow-in as they mount. Surviving leaves
-   below the stump keep their grown state (their animation already ran with
-   fill-mode forwards, and they are not remounted). */
+/* Growth interrupted by a cut: the component has shrunk the box to the
+   height actually grown, so the stem simply stands at full scale and the
+   bloom sits at the tip at the size it had reached (--bloom-scale). */
+.bg-flower-main .bg-flower-stem[data-settled] {
+  animation: none !important;
+  transform: scaleY(1);
+}
+.bg-flower-main .bg-flower-star[data-settled] {
+  animation: none !important;
+  top: 0%;
+  transform: translate(-50%, -99%) scale(var(--bloom-scale, 1));
+}
 
 /* A falling leaf clone. The standing plant's copy of a cut leaf simply
    isn't rendered (leaf stubs unmount), so there is no hidden-but-mounted
@@ -1179,199 +1263,82 @@ footer.is-grown .bg-flower-star {
 }
 .bg-flower-leaf-fall .bg-flower-leaf {
   animation: none !important;
-  opacity: 1;
 }
 .bg-flower-leaf-fall .bg-flower-leaf--right { transform: rotate(-30deg) scale(1); }
 .bg-flower-leaf-fall .bg-flower-leaf--left { transform: rotate(30deg) scale(1); }
 
-/* Easter egg: clicking a flower drives a knife-style cut. The blade enters
-   from a random side and sweeps across the flower at a slight random tilt
-   that passes through the click point; the lower stem stays put while the
-   upper portion is rendered into a duplicate (.bg-flower-cut-top) that drops
-   away with rotation and fades out. After the top has fallen, the surviving
-   lower stem fades, then the parent React component swaps in a freshly
-   randomised flower in the same slot.
-
-   The X bounds use wide pixel values so leaves rendered outside the
-   zero-width bg-flower span are still inside the polygon; --cut-left and
-   --cut-right are pixel Y values for the cut line at the polygon's left and
-   right edges (computed in JS so the line crosses the click point exactly).
-
-   .bg-flower-main wraps the standing flower (lower portion after the cut);
-   the sweep clip-path animation runs on it so the cut visibly progresses,
-   and the delayed fade on the same wrapper finishes the surviving stem. */
-.bg-flower-main {
+/* The severed piece: a snapshot of the plant as cut — its own box height,
+   bloom size and severed leaves — so the standing plant can regrow or be
+   cut again while it's still in the air. The reveal tracks the standing
+   sweep with the inverse polygon, so the handoff is invisible; after a
+   short pause the piece lifts off and drops, gravity-style, past the
+   footer's bottom edge, where the footer-flowers clip-path crops it rather
+   than fading it. */
+.bg-flower-piece {
   position: absolute;
-  inset: 0;
+  left: 0;
+  bottom: 0;
+  width: 0;
   pointer-events: none;
+  animation: flower-cut-top-fall 760ms 220ms cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
 }
-.bg-flower.is-cutting--from-left .bg-flower-main {
-  animation:
-    flower-cut-sweep-from-left 160ms cubic-bezier(0.4, 0, 0.6, 1) forwards,
-    flower-cut-fade 300ms 660ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+.bg-flower-piece--from-left .bg-flower-reveal {
+  animation: flower-cut-reveal-from-left 160ms cubic-bezier(0.4, 0, 0.6, 1) both;
 }
-.bg-flower.is-cutting--from-right .bg-flower-main {
-  animation:
-    flower-cut-sweep-from-right 160ms cubic-bezier(0.4, 0, 0.6, 1) forwards,
-    flower-cut-fade 300ms 660ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+.bg-flower-piece--from-right .bg-flower-reveal {
+  animation: flower-cut-reveal-from-right 160ms cubic-bezier(0.4, 0, 0.6, 1) both;
 }
-
-/* Cut-away duplicate: same flower geometry, clipped to ABOVE the cut line.
-   The reveal animation tracks the main body's sweep with an inverse polygon
-   (collapsed at the entry edge → full above-cut quad), so as the main body
-   hides its upper portion left-to-right, this duplicate reveals the same
-   pixels in the same place. The handoff is visually invisible — the upper
-   half just stays put through the sweep. After a short pause it lifts off
-   and drops; gravity-style ease-in carries it past the footer's bottom edge,
-   where the footer-flowers clip-path crops it out so it disappears
-   "off-screen" rather than fading. Pointer events stay off so the duplicate
-   never intercepts clicks. */
-.bg-flower-cut-top {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 1;
-}
-.bg-flower.is-cutting--from-left .bg-flower-cut-top {
-  animation:
-    flower-cut-reveal-from-left 160ms cubic-bezier(0.4, 0, 0.6, 1) both,
-    flower-cut-top-fall 760ms 220ms cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
-}
-.bg-flower.is-cutting--from-right .bg-flower-cut-top {
-  animation:
-    flower-cut-reveal-from-right 160ms cubic-bezier(0.4, 0, 0.6, 1) both,
-    flower-cut-top-fall 760ms 220ms cubic-bezier(0.55, 0.06, 0.68, 0.19) forwards;
-}
-
-/* The cut-top duplicate mounts mid-cut, so its stem/leaves/star would
-   otherwise re-trigger the grow animations from scratch (matching
-   `footer.is-grown ...` and `.work-panel.is-open ...`) and the falling top
-   would visibly shrink/rotate-in instead of dropping fully formed. Force its
-   inner parts into their fully-grown state. !important is needed only to
-   beat the higher-specificity grow rules; the explicit transforms apply
-   afterward because no animation overrides them. */
-.bg-flower-cut-top .bg-flower-stem {
+/* The piece mounts fully formed: without these its parts would match the
+   grow rules (`footer.is-grown ...`, `.work-panel.is-open ...`) and replay
+   the growth mid-fall. !important only beats their higher specificity. */
+.bg-flower-piece .bg-flower-stem {
   animation: none !important;
   transform: scaleY(1);
 }
-.bg-flower-cut-top .bg-flower-leaf {
+.bg-flower-piece .bg-flower-leaf {
   animation: none !important;
-  opacity: 1;
 }
-.bg-flower-cut-top .bg-flower-leaf--right {
-  transform: rotate(-30deg) scale(1);
-}
-.bg-flower-cut-top .bg-flower-leaf--left {
-  transform: rotate(30deg) scale(1);
-}
-.bg-flower-cut-top .bg-flower-star {
+.bg-flower-piece .bg-flower-leaf--right { transform: rotate(-30deg) scale(1); }
+.bg-flower-piece .bg-flower-leaf--left { transform: rotate(30deg) scale(1); }
+.bg-flower-piece .bg-flower-star {
   animation: none !important;
   top: 0%;
-  transform: translate(-50%, -99%) scale(1);
-  opacity: 1;
+  transform: translate(-50%, -99%) scale(var(--bloom-scale, 1));
 }
 
 /* The 6-vertex polygon visibly progresses across the flower instead of
    snapping into place. The "tip" (vertices 5 and 6) starts collapsed at one
    edge and travels to the opposite edge along the cut line and the top of
-   the box, leaving an angled boundary as it goes. */
+   the box, leaving an angled boundary as it goes. The -b copies exist only
+   to restart the animation on the next cut (see the parity note above). */
 @keyframes flower-cut-sweep-from-left {
-  from {
-    clip-path: polygon(
-      200px -9999px,
-      200px 9999px,
-      -200px 9999px,
-      -200px var(--cut-left, 0px),
-      -200px var(--cut-left, 0px),
-      -200px -9999px
-    );
-  }
-  to {
-    clip-path: polygon(
-      200px -9999px,
-      200px 9999px,
-      -200px 9999px,
-      -200px var(--cut-left, 0px),
-      200px var(--cut-right, 0px),
-      200px -9999px
-    );
-  }
+  from { clip-path: polygon(200px -9999px, 200px 9999px, -200px 9999px, -200px var(--cut-left, 0px), -200px var(--cut-left, 0px), -200px -9999px); }
+  to   { clip-path: polygon(200px -9999px, 200px 9999px, -200px 9999px, -200px var(--cut-left, 0px), 200px var(--cut-right, 0px), 200px -9999px); }
 }
-
+@keyframes flower-cut-sweep-from-left-b {
+  from { clip-path: polygon(200px -9999px, 200px 9999px, -200px 9999px, -200px var(--cut-left, 0px), -200px var(--cut-left, 0px), -200px -9999px); }
+  to   { clip-path: polygon(200px -9999px, 200px 9999px, -200px 9999px, -200px var(--cut-left, 0px), 200px var(--cut-right, 0px), 200px -9999px); }
+}
 @keyframes flower-cut-sweep-from-right {
-  from {
-    clip-path: polygon(
-      -200px -9999px,
-      -200px 9999px,
-      200px 9999px,
-      200px var(--cut-right, 0px),
-      200px var(--cut-right, 0px),
-      200px -9999px
-    );
-  }
-  to {
-    clip-path: polygon(
-      -200px -9999px,
-      -200px 9999px,
-      200px 9999px,
-      200px var(--cut-right, 0px),
-      -200px var(--cut-left, 0px),
-      -200px -9999px
-    );
-  }
+  from { clip-path: polygon(-200px -9999px, -200px 9999px, 200px 9999px, 200px var(--cut-right, 0px), 200px var(--cut-right, 0px), 200px -9999px); }
+  to   { clip-path: polygon(-200px -9999px, -200px 9999px, 200px 9999px, 200px var(--cut-right, 0px), -200px var(--cut-left, 0px), -200px -9999px); }
+}
+@keyframes flower-cut-sweep-from-right-b {
+  from { clip-path: polygon(-200px -9999px, -200px 9999px, 200px 9999px, 200px var(--cut-right, 0px), 200px var(--cut-right, 0px), 200px -9999px); }
+  to   { clip-path: polygon(-200px -9999px, -200px 9999px, 200px 9999px, 200px var(--cut-right, 0px), -200px var(--cut-left, 0px), -200px -9999px); }
 }
 
-@keyframes flower-cut-fade {
-  from {
-    opacity: 1;
-    transform: translate(0, 0);
-  }
-  to {
-    opacity: 0;
-    transform: translate(var(--cut-fade-dx, 0), 5px);
-  }
-}
-
-/* Reveal keyframes mirror flower-cut-sweep-* so cut-top fills in exactly
-   what the main body is hiding. Uses 4-vertex polygons (degenerate at the
-   entry edge) — vertices match between from/to so the clip-path interpolates
-   smoothly from "collapsed line" to "above-cut quad". */
+/* Reveal keyframes mirror flower-cut-sweep-* so the piece fills in exactly
+   what the standing plant is hiding. Uses 4-vertex polygons (degenerate at
+   the entry edge) — vertices match between from/to so the clip-path
+   interpolates smoothly from "collapsed line" to "above-cut quad". */
 @keyframes flower-cut-reveal-from-left {
-  from {
-    clip-path: polygon(
-      -200px -9999px,
-      -200px -9999px,
-      -200px var(--cut-left, 0px),
-      -200px var(--cut-left, 0px)
-    );
-  }
-  to {
-    clip-path: polygon(
-      -200px -9999px,
-      200px -9999px,
-      200px var(--cut-right, 0px),
-      -200px var(--cut-left, 0px)
-    );
-  }
+  from { clip-path: polygon(-200px -9999px, -200px -9999px, -200px var(--cut-left, 0px), -200px var(--cut-left, 0px)); }
+  to   { clip-path: polygon(-200px -9999px, 200px -9999px, 200px var(--cut-right, 0px), -200px var(--cut-left, 0px)); }
 }
-
 @keyframes flower-cut-reveal-from-right {
-  from {
-    clip-path: polygon(
-      200px -9999px,
-      200px -9999px,
-      200px var(--cut-right, 0px),
-      200px var(--cut-right, 0px)
-    );
-  }
-  to {
-    clip-path: polygon(
-      -200px -9999px,
-      200px -9999px,
-      200px var(--cut-right, 0px),
-      -200px var(--cut-left, 0px)
-    );
-  }
+  from { clip-path: polygon(200px -9999px, 200px -9999px, 200px var(--cut-right, 0px), 200px var(--cut-right, 0px)); }
+  to   { clip-path: polygon(-200px -9999px, 200px -9999px, 200px var(--cut-right, 0px), -200px var(--cut-left, 0px)); }
 }
 
 /* Pure translate + rotate fall — no opacity change. The piece drops with a
@@ -1388,27 +1355,21 @@ footer.is-grown .bg-flower-star {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .bg-flower.is-cutting--from-left .bg-flower-main,
-  .bg-flower.is-cutting--from-right .bg-flower-main,
-  .bg-flower.is-cutting .bg-flower-cut-top {
-    animation: none;
-  }
-}
-
 /* Side drawer — fixed-position panel slides in from the right. The works list
    stays in place; page height is unchanged on open/close. */
 .work-panel-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(68, 91, 75, 0.18);
-  opacity: 0;
+  /* The tint is drawn in from the right edge alongside the sliding panel
+     (and retracts with it), never faded over the page. */
+  clip-path: inset(0 0 0 100%);
   pointer-events: none;
-  transition: opacity 0.25s var(--ease-soft);
+  transition: clip-path 0.25s var(--ease-soft);
   z-index: 50;
 }
 .work-panel-backdrop.is-open {
-  opacity: 1;
+  clip-path: inset(0);
   pointer-events: auto;
 }
 .work-panel {
@@ -1511,16 +1472,18 @@ footer.is-grown .bg-flower-star {
   cursor: none;
   padding: 0;
   z-index: 62;
-  opacity: 0;
+  /* Wiped in from its right edge as it slides in with the panel. The open
+     clip is outset so the focus ring and hover pill stay unclipped. */
+  clip-path: inset(-12px -12px -12px 100%);
   pointer-events: none;
   transform: translateX(40px);
   transition:
     color 0.25s var(--ease-soft),
-    opacity 0.25s var(--ease-soft),
+    clip-path 0.25s var(--ease-soft),
     transform 0.25s var(--ease-soft);
 }
 .work-panel-close.is-open {
-  opacity: 1;
+  clip-path: inset(-12px);
   pointer-events: auto;
   transform: translateX(0);
 }
@@ -1537,17 +1500,14 @@ footer.is-grown .bg-flower-star {
   inset: 0;
   border-radius: inherit;
   background: var(--accent);
-  transform: scale(0.86);
-  opacity: 0;
+  /* Grows out of its centre rather than fading in. */
+  clip-path: circle(0% at 50% 50%);
   z-index: -1;
-  transition:
-    transform 0.25s var(--ease-soft),
-    opacity 0.25s var(--ease-soft);
+  transition: clip-path 0.25s var(--ease-soft);
 }
 @media (pointer: coarse) {
   .work-panel-close:hover::before {
-    transform: scale(1);
-    opacity: 1;
+    clip-path: circle(71% at 50% 50%);
   }
 }
 
@@ -1566,14 +1526,15 @@ footer.is-grown .bg-flower-star {
   gap: 14px;
   z-index: 62;
   pointer-events: none;
-  opacity: 0;
+  /* Wiped in from the right edge with the close button above it. */
+  clip-path: inset(-12px -12px -12px 100%);
   transform: translateX(40px);
   transition:
-    opacity 0.25s var(--ease-soft),
+    clip-path 0.25s var(--ease-soft),
     transform 0.25s var(--ease-soft);
 }
 .work-portal-dots.is-open {
-  opacity: 1;
+  clip-path: inset(-12px);
   transform: translateX(0);
 }
 .work-portal-dots li { list-style: none; }
@@ -1597,11 +1558,10 @@ footer.is-grown .bg-flower-star {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--ink);
-  opacity: 0.45;
+  /* A resting tone, mixed toward the page rather than made transparent. */
+  background: color-mix(in srgb, var(--ink) 45%, var(--bg));
   transform: scale(1);
   transition:
-    opacity 0.35s var(--ease-soft),
     transform 0.4s var(--ease-soft),
     background-color 0.25s ease;
 }
@@ -1611,24 +1571,20 @@ footer.is-grown .bg-flower-star {
   height: 22px;
   color: var(--accent);
   display: block;
-  /* Start matching the dot's size (7/22 ≈ 0.32) so the star grows out of it */
-  transform: scale(0.32) rotate(-30deg);
-  opacity: 0;
+  /* Grows out of the dot's centre, turning as it opens, while the dot
+     shrinks away beneath it — a morph, not a cross-fade. */
+  transform: scale(0) rotate(-30deg);
   transition:
     transform 0.4s var(--ease-soft),
-    opacity 0.35s var(--ease-soft),
     color 0.25s ease;
 }
 .work-portal-dot:not(.is-active):hover .work-portal-dot-mark {
-  opacity: 1;
+  background: var(--ink);
 }
 .work-portal-dot.is-active .work-portal-dot-mark {
-  opacity: 0;
-  /* Grow the dot up to the star's footprint as it fades out */
-  transform: scale(3.14);
+  transform: scale(0);
 }
 .work-portal-dot.is-active .work-portal-dot-star {
-  opacity: 1;
   transform: scale(1) rotate(0deg);
 }
 .work-panel-content {
@@ -1920,17 +1876,14 @@ html.no-orbit .ending-runway { display: none; }
   inset: 0;
   border-radius: inherit;
   background: var(--accent);
-  transform: scale(0.86);
-  opacity: 0;
+  /* Drawn out from the left edge, leading the chevron in. */
+  clip-path: inset(0 100% 0 0 round 999px);
   z-index: -1;
-  transition:
-    transform 0.45s var(--ease-soft),
-    opacity 0.32s var(--ease-soft);
+  transition: clip-path 0.45s var(--ease-soft);
 }
 @media (pointer: coarse) {
   .contact-email:hover::before {
-    transform: scale(1);
-    opacity: 1;
+    clip-path: inset(0 0 0 0 round 999px);
   }
 }
 /* Invisible hit-area halo. Extends the pointer detection zone a few px past
@@ -1968,18 +1921,17 @@ html.no-orbit .ending-runway { display: none; }
   width: 0;
   margin-right: 0;
   overflow: hidden;
-  opacity: 0;
+  /* Its own zero width is the mask: the arrow is drawn out from the left
+     edge as the box opens. */
   transform: translateX(-8px);
   transition:
     width 0.4s var(--ease-soft),
     margin-right 0.4s var(--ease-soft),
-    opacity 0.35s var(--ease-soft),
     transform 0.45s var(--ease-soft);
 }
 .contact-email:hover .contact-chevron {
   width: 1em;
   margin-right: 0.4em;
-  opacity: 1;
   transform: translateX(0);
   transition-delay: 0.06s;
 }
@@ -2115,11 +2067,12 @@ footer {
   letter-spacing: inherit;
   text-transform: inherit;
   cursor: none;
-  transition: background 0.25s ease, border-color 0.25s ease;
+  /* Ink fill rises from the bottom edge, like the nav's contact pill. */
+  background: linear-gradient(var(--ink), var(--ink)) no-repeat bottom / 100% 0%;
+  transition: background-size 0.3s var(--ease-soft);
 }
 .footer-top:hover {
-  background: var(--ink);
-  border-color: var(--ink);
+  background-size: 100% 100%;
 }
 
 .footer-top-base {
@@ -2131,16 +2084,15 @@ footer {
 .footer-top-char {
   display: inline-block;
   white-space: pre;
-  transition:
-    transform 0.22s var(--ease-soft),
-    opacity   0.18s ease;
+  transition: transform 0.22s var(--ease-soft);
   /* Stagger: chars leave one-by-one going in, snap together going out.
      Hover state below zeroes out the delay so they all fly together. */
   transition-delay: calc(var(--i) * 28ms);
 }
+/* Clear of the pill's top edge (overflow masks it): the 1.2em line box
+   plus 10px padding and the border, with room for the tilt. */
 .footer-top:hover .footer-top-char {
-  transform: translateY(-60%) rotate(-12deg);
-  opacity: 0;
+  transform: translateY(-2.6em) rotate(-12deg);
   color: var(--bg);
   transition-delay: 0s;
 }
@@ -2153,17 +2105,16 @@ footer {
   justify-content: center;
   z-index: 1;
   color: var(--ink);
-  transform: translateY(-110%);
-  opacity: 0;
+  /* Rises in from below as the chars leave upward — one direction, no
+     crossing (see .nav-contact-alt). */
+  transform: translateY(110%);
   transition:
     transform 0.32s var(--ease-soft),
-    opacity   0.28s ease,
     color     0.25s ease;
   transition-delay: 0.04s;
 }
 .footer-top:hover .footer-top-alt {
   transform: translateY(0);
-  opacity: 1;
   color: var(--bg);
   transition-delay: 0.08s;
 }
@@ -2182,7 +2133,7 @@ footer {
      The page's existing main clip keeps this from adding scroll distance. */
   clip-path: inset(-9999px -9999px calc(-1 * var(--stem-bleed)) -9999px);
 }
-.footer-flowers .bg-flower-main > .bg-flower-stem::before {
+.footer-flowers .bg-flower-main .bg-flower-stem::before {
   content: '';
   position: absolute;
   top: 100%;
@@ -2311,7 +2262,7 @@ footer {
   .contact-email::before,
   .contact-email-char,
   .contact-chevron {
-    transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease !important;
+    transition: background-color 0.2s ease, color 0.2s ease !important;
     transition-delay: 0s !important;
   }
 }

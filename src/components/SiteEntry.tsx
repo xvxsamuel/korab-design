@@ -3,7 +3,7 @@ import App from '../App';
 import Cogs from './Cogs';
 
 const SHOW_AFTER_MS = 120;
-const EXIT_MS = 180;
+const EXIT_MS = 280;
 const MAX_WAIT_MS = 2000;
 
 export default function SiteEntry({ preview = false }: { preview?: boolean }) {

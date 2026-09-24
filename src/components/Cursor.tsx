@@ -261,8 +261,9 @@ export default function Cursor() {
           lastBlend = blend;
         }
 
-        // Scissors icon — swings in to rest at a working tilt, folds away on
-        // unhover along the same path.
+        // Scissors icon — grows out of the dot from nothing (no fade) and
+        // swings in to rest at a working tilt, folding away on unhover along
+        // the same path.
         const scEl = scissorsRef.current;
         if (scEl) {
           const scNext = sc < 0.02
@@ -273,11 +274,11 @@ export default function Cursor() {
             if (sc < 0.02) {
               scEl.style.opacity = '0';
             } else {
-              scEl.style.opacity = String(Math.min(1, sc * 1.4));
+              scEl.style.opacity = '1';
               // Rests at -38° — blades up-left toward the stem it cuts —
               // arriving from a further -35° underswing.
               scEl.style.transform =
-                `scale(${(0.35 + 0.65 * sc).toFixed(3)}) rotate(${(-38 - (1 - sc) * 35).toFixed(1)}deg)`;
+                `scale(${sc.toFixed(3)}) rotate(${(-38 - (1 - sc) * 35).toFixed(1)}deg)`;
               scEl.style.color = `rgb(${INK_REAL[0]},${INK_REAL[1]},${INK_REAL[2]})`;
             }
           }

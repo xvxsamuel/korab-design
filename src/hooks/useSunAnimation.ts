@@ -520,14 +520,14 @@ export function useSunAnimation() {
         worksOrbit?.classList.add('sun-fade-in');
 
         // r=99 matches the outer ring's resting radius, so the inner ring
-        // first appears flush with the outer trace and then collapses
-        // inward to its rendered r=72. setAttribute on `r` is unambiguous
-        // — the radius shrinks symmetrically around (cx, cy) — so we drive
-        // it with rAF rather than risk a browser that doesn't tween the
-        // CSS `r` property reliably.
+        // appears at full strength ON the finished outer trace — hidden in
+        // it, not faded up — and then peels off inward to its rendered
+        // r=72. setAttribute on `r` is unambiguous — the radius shrinks
+        // symmetrically around (cx, cy) — so we drive it with rAF rather
+        // than risk a browser that doesn't tween the CSS `r` property
+        // reliably.
         const SHRINK_DELAY = 1400;
         const SHRINK_DUR   = 900;
-        const FADE_DUR     = 250;
         const R_START      = 99;
         const R_END        = 72;
         // cubic-bezier(0.22, 1, 0.36, 1) flattens fast and lingers — the
@@ -542,10 +542,9 @@ export function useSunAnimation() {
             return;
           }
           const shrinkT = Math.min(1, elapsed / SHRINK_DUR);
-          const fadeT   = Math.min(1, elapsed / FADE_DUR);
           const r = R_START + (R_END - R_START) * easeOut(shrinkT);
           sunRingInner.setAttribute('r', String(r));
-          sunRingInner.style.opacity = String(fadeT);
+          sunRingInner.style.opacity = '1';
           if (shrinkT < 1) innerRingRaf = requestAnimationFrame(tickInner);
         };
         // Seed initial state so the very first paint has the ring at r=99
