@@ -41,19 +41,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const root = document.documentElement;
-    const update = () => {
-      const pastStart = window.scrollY > 40;
-      setCueHidden(pastStart);
-      // Disable bounce before reaching the hero; allow it at the footer.
-      root.classList.toggle('past-scroll-start', pastStart);
-    };
+    const update = () => setCueHidden(window.scrollY > 40);
     update();
     window.addEventListener('scroll', update, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', update);
-      root.classList.remove('past-scroll-start');
-    };
+    return () => window.removeEventListener('scroll', update);
   }, []);
 
   // Declared ahead of the orrery: its layout effect must scroll into place

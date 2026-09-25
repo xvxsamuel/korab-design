@@ -85,18 +85,13 @@ html,
 body {
   margin: 0;
   padding: 0;
-  /* Prevent bounce near the hero so its text stays aligned with the star. */
-  overscroll-behavior-y: none;
+  /* No bounce or scroll chaining anywhere on the site. */
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--body);
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
-}
-
-html.past-scroll-start,
-html.past-scroll-start body {
-  overscroll-behavior-y: auto;
 }
 
 html {
@@ -1388,7 +1383,7 @@ footer.is-grown .bg-flower-star {
     visibility 0s linear 0.25s,
     background-color 0.25s ease;
   overflow: hidden;
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
 }
 .work-panel.is-open {
   transform: translateX(0);
@@ -1445,7 +1440,7 @@ footer.is-grown .bg-flower-star {
   /* The panel scrolls its own content — the page behind stays frozen. */
   overflow-y: auto;
   overflow-x: hidden;
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
   /* Re-resolve against the layer's palette: the html-level scrollbar-color
      already froze the root ink, and inheritance passes on the resolved
      value, not the var() — without this Firefox would paint the root-green
