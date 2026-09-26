@@ -2,8 +2,10 @@ import pfp from '../assets/face.jpg';
 import StarFlat from '../assets/starflat.svg?react';
 
 const PRACTICE = [
+  'UX Design',
+  'Creative Development',
   'Product Design',
-  'UX Research',
+  'User Research',
   'Brand Identity',
   'Web Development',
 ];
@@ -15,8 +17,8 @@ export default function About() {
       <div className="about-body">
         <div className="about-side">
           <div className="about-portrait">
-            {/* The crop owns the circle; the img inside is zoomed past it so
-                the framing has slack to aim with (see .about-img). */}
+            {/* The crop owns the circle; the img inside fills it and is aimed
+                with object-position (see .about-img). */}
             <div className="about-img-crop">
               <img
                 src={pfp}
@@ -29,17 +31,19 @@ export default function About() {
               />
             </div>
           </div>
-          <h3 className="sr-only">What I do</h3>
-          {/* Bulleted with the works' waymark mark — static on purpose; the
-              turning versions belong to the orbit. */}
-          <ul className="about-capabilities">
-            {PRACTICE.map((label) => (
-              <li key={label}>
-                <StarFlat className="capability-star" aria-hidden="true" />
-                {label}
-              </li>
-            ))}
-          </ul>
+          <div className="about-practice">
+            <h3 className="about-practice-label">What I do</h3>
+            {/* Bulleted with the works' waymark mark — static on purpose; the
+                turning versions belong to the orbit. */}
+            <ul className="about-capabilities">
+              {PRACTICE.map((label) => (
+                <li key={label}>
+                  <StarFlat className="capability-star" aria-hidden="true" />
+                  {label}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
         <div className="about-left">
           <p className="about-lead">

@@ -46,7 +46,7 @@
   --fs-lead:     clamp(1.625rem, 1.229rem + 1.69vw,   2.75rem);
   --fs-email:    clamp(1.375rem, 1.078rem + 1.403vw,  2.5rem);
   --fs-workname: clamp(1.25rem,  1.088rem + 0.691vw,  1.75rem);
-  --fs-item:     clamp(1.25rem,  1.12rem + 0.556vw,   1.625rem);
+  --fs-item:     clamp(1.0625rem, 0.98rem + 0.35vw,   1.3125rem);
   --gutter:   56px;
   --sun-size: 46vmin;
 }
@@ -470,13 +470,15 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
 }
 /* The works train inks in exactly like star A, through #inkThreshold (the
    same cut without the accent flood, so a presented body's inlay, icon and
-   label keep their own colours). It animates the MARK and LABEL wrappers,
-   never the star itself: the star's idle spin and scroll-driven rotate must
-   never be displaced (an animation on it would REPLACE the spin; on an
-   ancestor they compose). The label is filtered on its own box because it
-   hangs outside the mark's filter region. The hook strips the class on
+   label keep their own colours). Each layer — ink, inlay, icon, label — is
+   filtered on its own, so each alpha cut draws its own silhouette; one
+   filter over the whole mark smeared the inlay's colour into the ink and
+   the stars inked in as soft discs. It animates the star's child SVGs,
+   never the spinning wrapper: an animation there would REPLACE the idle
+   spin (on a descendant they compose). The hook strips the class on
    animationend so the filter doesn't outlive the entrance. */
-.works-orbit.sun-fade-in .work-body-mark,
+.works-orbit.sun-fade-in .work-body-star > svg,
+.works-orbit.sun-fade-in .work-body-icon,
 .works-orbit.sun-fade-in .work-body-label {
   filter: blur(var(--star-blur)) url(#inkThreshold);
   animation: work-star-bloom 1.8s cubic-bezier(0.32, 0, 0.67, 0) 0.15s both;
@@ -759,6 +761,7 @@ section {
 .work-body-star {
   position: absolute;
   inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   /* The outer star keeps the original gold throughout the reveal. */
@@ -767,6 +770,13 @@ section {
   /* Orbital angle, written per frame by useSunAnimation. Only the mark turns —
      the project inside stays upright and readable. */
   rotate: var(--spin, 0deg);
+}
+.work-body-star > svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .work-body-ink {
   fill: currentColor;
@@ -1749,41 +1759,48 @@ footer.is-grown .bg-flower-star {
   box-shadow: 0 0 0 1px var(--ink-faint);
 }
 .about-img {
-  /* Zoomed past the crop circle so the framing has real slack in both axes,
-     then aimed with object-position — the only two knobs: X% < 50 slides
-     the subject right, Y% < 50 slides it down. */
-  width: 118%;
-  height: 118%;
-  margin: -9% 0 0 -9%;
+  /* The photo is taller than wide, so cover leaves object-position slack only
+     vertically (Y% > 50 slides the subject up). Horizontal aim comes from
+     the box instead: 5% wider than the crop and pinned to its left edge, the
+     picture sits 2.5% right of centre — the most this zoom allows before a
+     sliver of background shows at the circle's left edge. */
+  width: 105%;
+  height: 100%;
   object-fit: cover;
-  object-position: 36% 44%;
+  object-position: 50% 52%;
   display: block;
 }
-/* Capabilities — a plain list bulleted with the works' waymark mark, sat
-   under the portrait and centred on its axis so the "who" and the "what"
-   read as one column. Width matches .about-portrait's clamp. */
+/* Capabilities — a quiet label over hairline rows (the same row language as
+   the flat works list), sat under the portrait at its width so the "who" and
+   the "what" read as one column. Pushed to the column's bottom so the last
+   hairline sits level with the bio's last line. */
+.about-practice {
+  margin-top: auto;
+  width: var(--portrait-w);
+}
+.about-practice-label {
+  font-family: var(--body);
+  font-weight: 400;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  color: var(--ink-soft);
+  margin: 0 0 16px;
+}
 .about-capabilities {
   list-style: none;
-  /* Fills the column below the portrait and distributes the rows evenly
-     through it (gap is the minimum spacing; space-between spreads the
-     rest). The 6px bottom margin is optical: the bio's 18px/1.7 text
-     carries ~6px of half-leading below its last baseline, and without the
-     compensation the list's line-height-1 rows read as sitting lower even
-     when the boxes align exactly. */
-  flex: 1 0 auto;
-  justify-content: space-between;
+  /* The 6px bottom margin is optical: the bio's 18px/1.7 text carries ~6px
+     of half-leading below its last baseline, so without it the closing
+     hairline reads as sitting lower even when the boxes align exactly. */
   margin: 0 0 6px;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  width: var(--portrait-w);
 }
 .about-capabilities li {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--ink-faint);
   font-family: var(--display);
   font-weight: 500;
   font-size: var(--fs-item);
@@ -1791,9 +1808,10 @@ footer.is-grown .bg-flower-star {
   line-height: 1;
   color: var(--ink);
 }
+.about-capabilities li:last-child { border-bottom: 1px solid var(--ink-faint); }
 .capability-star {
-  width: 17px;
-  height: 17px;
+  width: 12px;
+  height: 12px;
   flex-shrink: 0;
   color: var(--accent);
 }
@@ -2160,6 +2178,7 @@ footer {
   .about-body { --portrait-w: clamp(148px, 42vw, 220px); grid-template-columns: 1fr; gap: 40px; }
   .about-lead { max-width: none; }
   .about-bio { margin-top: 0; }
+  .about-practice { width: 100%; }
   .contact-email {
     /* Cap so the hover-expanded pill (chevron + extra padding) stays inset from
        the viewport's right edge. Width = section content box + the 0.7em the
