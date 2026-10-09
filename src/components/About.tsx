@@ -25,7 +25,7 @@ export default function About() {
                 alt="Samuel Korab"
                 className="about-img"
                 width="800"
-                height="1000"
+                height="989"
                 loading="lazy"
                 decoding="async"
               />
