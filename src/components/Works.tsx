@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import WorkStar from './WorkStar';
 import { labelFilterId } from '../lib/inkLabel';
 import CaseStudy from './works/CaseStudy';
+import WorkInProgress from './works/WorkInProgress';
 import WorkArc, { WorkArcGround } from './works/WorkArc';
 import StarFlat from '../assets/starflat.svg?react';
 import { projects, type Project } from '../data/projects';
@@ -23,6 +24,9 @@ import {
 } from '../lib/starReveal';
 
 const PANEL_ID = 'work-panel';
+// While the case studies are being written, every project page shows the
+// work-in-progress cogs instead. Flip to bring the case studies back.
+const CASE_STUDIES_LIVE = false;
 // Open plays a touch slower than close: arriving is the moment, leaving
 // should get out of the way.
 const OPEN_MS = 760;
@@ -450,11 +454,15 @@ export default function Works() {
       style={{ background: p.bg, ...projectPalette(p) }}
     >
       <div className="work-panel-inner">
-        <CaseStudy
-          project={p}
-          next={projects[(projects.findIndex((q) => q.id === p.id) + 1) % projects.length]}
-          onNext={(next, mark) => cycleTo(next.id, mark)}
-        />
+        {CASE_STUDIES_LIVE ? (
+          <CaseStudy
+            project={p}
+            next={projects[(projects.findIndex((q) => q.id === p.id) + 1) % projects.length]}
+            onNext={(next, mark) => cycleTo(next.id, mark)}
+          />
+        ) : (
+          <WorkInProgress />
+        )}
       </div>
       <WorkArcGround />
     </div>

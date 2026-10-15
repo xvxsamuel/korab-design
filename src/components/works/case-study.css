@@ -1475,3 +1475,34 @@
   .cs-zoom-reset,
   .cs-compare-knob { transition: none; }
 }
+
+/* Work in progress --------------------------------------------------- */
+
+/* Stands in for a case study still being written (WorkInProgress): the
+   loader's cogs, livelier and larger, centred on the page with one line
+   under them. The padding keeps clear of the nav band, the close button
+   and the works arc, like a case study's rail. */
+.wip {
+  min-height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: clamp(28px, 5vh, 44px);
+  padding: 96px 72px;
+  color: var(--ink);
+}
+.wip .cogs {
+  --gear-period: 14s;
+  width: clamp(168px, 30vmin, 260px);
+}
+.wip-label {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: var(--fs-panel);
+  line-height: 1;
+}
+/* Phones: the arc rises from the bottom edge, so the pair sits higher. */
+@media (max-width: 900px) {
+  .wip { padding: 72px 24px 160px; }
+}
