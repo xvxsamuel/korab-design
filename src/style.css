@@ -21,6 +21,9 @@
   --bg:       #F3DBC3;
   --ink:      #445b4b;
   --accent:   #d79554;
+  /* The orbit stars' gold, for places that sit inside a project's scoped
+     palette (where --accent is the project's) but draw an orbit star. */
+  --gold:     #d79554;
   --ink-soft: rgba(68, 91, 75, 0.55);
   --ink-faint: rgba(68, 91, 75, 0.18);
   --rule:     rgba(68, 91, 75, 0.85);
@@ -87,7 +90,9 @@ body {
   padding: 0;
   /* No bounce or scroll chaining anywhere on the site. */
   overscroll-behavior: none;
-  background: var(--bg);
+  /* --canvas: an open work's colour (Works.tsx), so the reserved scrollbar
+     gutter, browser insets and overscroll match the page on screen. */
+  background: var(--canvas, var(--bg));
   color: var(--ink);
   font-family: var(--body);
   font-weight: 400;
@@ -159,10 +164,14 @@ html { scrollbar-width: auto; scrollbar-color: var(--ink) transparent; }
   mix-blend-mode: difference;
   pointer-events: none;
   z-index: 1000;
+  /* Shown only together with `cursor: none` (html.cursor-custom), so one of
+     the two cursors is always on screen — never both, never neither. */
+  visibility: hidden;
   /* Position via transform (not left/top) so per-frame moves stay on the
      compositor — no layout/paint of the page each mousemove. */
   will-change: transform, width, height, border-radius, background;
 }
+html.cursor-custom .cursor { visibility: visible; }
 /* Scissors face — Cursor.tsx drives opacity/scale/rotation per frame as the
    dot morphs over a flower's cut zone. */
 .cursor-scissors {
@@ -783,10 +792,18 @@ section {
 }
 .work-body-inlay {
   fill: var(--star-color);
+  /* The inlay sits in the gold's cut-out on the same contour; two
+     anti-aliased edges there let a hairline of page show between them. A
+     same-colour stroke tucks the fill just under the gold to close it. */
+  stroke: var(--star-color);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
   transform-box: view-box;
   transform-origin: 50% 50%;
   /* Both star contours turn together; the logo stays upright in the centre. */
-  transform: scale(clamp(0, var(--in, 0), 1));
+  /* Finishes filling a little before the morph does, so a work sitting just
+     off the presented point still shows a full inlay, not a hairline gap. */
+  transform: scale(clamp(0, calc(var(--in, 0) * 1.1), 1));
 }
 .work-body-icon {
   position: absolute;
@@ -802,15 +819,15 @@ section {
   transform: translate(-50%, -50%) scale(clamp(0, var(--in, 0), 1));
 }
 .work-body-label {
-  /* Gated by the morph, weighted by the menu focus. The gate WIPES the
-     label in from its left edge (and back out) as the body opens — no
-     fade. The focus weight is a tone, not a transparency: the text mixes
-     toward the page colour. The focus factor saturates at ~0.6 rather than
-     1.0, which turns the full-tone moment from a knife-edge at the exact
-     presented point into a plateau about ±13° of arc wide. */
-  --reveal: clamp(0, (var(--in, 0) - 0.35) * 1.8, 1);
+  /* Inked in, and back out, by lib/inkLabel.ts once a body has mostly
+     become a work: blurred text through an alpha cut gathers into letters,
+     like the hero's name on first display. Weighted by the menu focus — a
+     tone, not a transparency: the text mixes toward the page colour. The
+     focus factor saturates at ~0.6 rather than 1.0, which turns the
+     full-tone moment from a knife-edge at the exact presented point into a
+     plateau about ±13° of arc wide. */
   --weight: calc((0.3 + 0.7 * clamp(0, var(--focus, 0) * 2, 1)) * 100%);
-  clip-path: inset(-0.4em calc((1 - var(--reveal)) * 100%) -0.4em -0.4em);
+  visibility: hidden;
 }
 .work-body-label .work-body-name {
   color: color-mix(in srgb, var(--ink) var(--weight), var(--bg));
@@ -830,9 +847,11 @@ section {
   transition: transform 0.5s var(--ease-soft);
 }
 .work-body:hover .work-body-gear,
-.work-body:focus-visible .work-body-gear {
+.work-body:focus-visible:not([data-returned]) .work-body-gear {
   transform: rotate(48deg);
 }
+/* Under its own reveal: the reveal draws this star until it hands back. */
+.work-body.is-revealed .work-body-mark { visibility: hidden; }
 /* While the hand turns the gear, its idle spin holds still — one rotation
    source at a time. Resuming from pause continues where it left off, so
    there's no snap on unhover. */
@@ -1360,103 +1379,83 @@ footer.is-grown .bg-flower-star {
   }
 }
 
-/* Side drawer — fixed-position panel slides in from the right. The works list
-   stays in place; page height is unchanged on open/close. */
-.work-panel-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(68, 91, 75, 0.18);
-  /* The tint is drawn in from the right edge alongside the sliding panel
-     (and retracts with it), never faded over the page. */
-  clip-path: inset(0 0 0 100%);
-  pointer-events: none;
-  transition: clip-path 0.25s var(--ease-soft);
-  z-index: 50;
-}
-.work-panel-backdrop.is-open {
-  clip-path: inset(0);
-  pointer-events: auto;
-}
+/* Project pages ------------------------------------------------------- */
+
+/* A full-viewport stage, transparent itself: each project page is a layer
+   inside it, and a page arrives by growing out of the star that was clicked
+   (Works.tsx clips it per frame; the geometry is in lib/starReveal.ts).
+   While cycling, the page being covered waits beneath the reveal. */
 .work-panel {
   position: fixed;
   top: 0;
-  right: 0;
-  bottom: 0;
+  left: 0;
+  /* 100vw, not inset: the root reserves a scrollbar gutter even while
+     scroll-locked, and inset stops short of it. */
   width: 100vw;
-  background: var(--bg);
-  border-left: 1px solid var(--ink-faint);
+  height: 100%;
   z-index: 60;
-  transform: translateX(100%);
   visibility: hidden;
-  transition:
-    transform 0.25s var(--ease-soft),
-    visibility 0s linear 0.25s,
-    background-color 0.25s ease;
+  pointer-events: none;
   overflow: hidden;
   overscroll-behavior: none;
 }
-.work-panel.is-open {
-  transform: translateX(0);
-  visibility: visible;
-  transition:
-    transform 0.25s var(--ease-soft),
-    visibility 0s linear 0s,
-    background-color 0.25s ease;
+/* Phones show page beyond the small viewport — under translucent toolbars,
+   behind a retracting URL bar — so the panel reaches the large one. */
+@supports (height: 100lvh) {
+  .work-panel { height: max(100%, 100lvh); }
 }
-/* Each cycled project renders as its own layer absolutely-positioned inside
-   the panel so we can slide the leaving and incoming layers past each other
-   vertically when scrolling between projects. */
+.work-panel.is-up {
+  visibility: visible;
+  pointer-events: auto;
+}
 .work-panel-layer {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  will-change: transform;
 }
-.work-panel-layer-leaving.cycle-next {
-  animation: panel-layer-leave-up 0.26s var(--ease-soft) forwards;
+.work-panel-layer.is-leaving { z-index: 0; }
+/* The star a page grows out of: over the page it covers, under its own. */
+.work-reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  visibility: hidden;
+  pointer-events: none;
 }
-.work-panel-layer-current.cycle-next {
-  animation: panel-layer-enter-up 0.26s var(--ease-soft) forwards;
-}
-.work-panel-layer-leaving.cycle-prev {
-  animation: panel-layer-leave-down 0.26s var(--ease-soft) forwards;
-}
-.work-panel-layer-current.cycle-prev {
-  animation: panel-layer-enter-down 0.26s var(--ease-soft) forwards;
-}
-@keyframes panel-layer-leave-up {
-  from { transform: translateY(0); }
-  to   { transform: translateY(-100%); }
-}
-@keyframes panel-layer-enter-up {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
-}
-@keyframes panel-layer-leave-down {
-  from { transform: translateY(0); }
-  to   { transform: translateY(100%); }
-}
-@keyframes panel-layer-enter-down {
-  from { transform: translateY(-100%); }
-  to   { transform: translateY(0); }
-}
+/* The orbit's gold — not the project accent the portal scopes in. */
+.work-reveal-ink { fill: var(--gold); }
+/* Same seam fix as the orbit's inlay: a same-colour stroke under the gold. */
+.work-reveal-inlay { stroke-width: 1.6; stroke-linejoin: round; }
 .work-panel-inner {
   position: relative;
-  padding: clamp(80px, 12vh, 140px) var(--gutter) clamp(40px, 8vh, 80px);
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  /* The panel scrolls its own content — the page behind stays frozen. */
+  /* The page scrolls its own content — the site behind stays frozen. */
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: none;
   /* Re-resolve against the layer's palette: the html-level scrollbar-color
      already froze the root ink, and inheritance passes on the resolved
      value, not the var() — without this Firefox would paint the root-green
-     thumb inside an amber panel. (The webkit path re-reads var(--ink) at
+     thumb inside an amber page. (The webkit path re-reads var(--ink) at
      this element on its own.) */
   scrollbar-color: var(--ink) transparent;
+}
+/* A band of the page colour under the site nav: the case study scrolls
+   beneath it instead of running into the nav's links. */
+.work-panel-inner::before {
+  content: '';
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: block;
+  height: 72px;
+  margin-bottom: -72px;
+  background: var(--bg);
 }
 /* Sibling of .work-panel (not a child) so it renders in the root stacking context,
    allowing the morphing cursor pill (z-index 61) to slide behind the icon (z-index 62). */
@@ -1477,20 +1476,18 @@ footer.is-grown .bg-flower-star {
   cursor: none;
   padding: 0;
   z-index: 62;
-  /* Wiped in from its right edge as it slides in with the panel. The open
-     clip is outset so the focus ring and hover pill stay unclipped. */
-  clip-path: inset(-12px -12px -12px 100%);
+  /* Grows out of its centre once the page has settled over the view, and
+     closes back to a point the moment the page starts to shrink. The open
+     circle reaches past the box so the focus ring and hover pill fit. */
+  clip-path: circle(0% at 50% 50%);
   pointer-events: none;
-  transform: translateX(40px);
   transition:
     color 0.25s var(--ease-soft),
-    clip-path 0.25s var(--ease-soft),
-    transform 0.25s var(--ease-soft);
+    clip-path 0.3s var(--ease-soft);
 }
 .work-panel-close.is-open {
-  clip-path: inset(-12px);
+  clip-path: circle(75% at 50% 50%);
   pointer-events: auto;
-  transform: translateX(0);
 }
 .work-panel-close svg {
   position: relative;
@@ -1516,167 +1513,177 @@ footer.is-grown .bg-flower-star {
   }
 }
 
-/* Project indicator dots — sit just below the close button, one per project.
-   The active project's dot morphs into a Star in the project's accent color. */
-.work-portal-dots {
+/* Works navigator (WorkArc): a piece of the orbit curving in from the
+   screen's edge, every work's star sitting on it. The circle's centre sits
+   off screen; --bulge px of it show. The stars sit --step apart, centred on
+   --base in reading order (--dir); the open work's is the large one. The
+   geometry comes from WorkArc's LAYOUTS. Wide screens hang it high on the
+   right edge, out of the reading column's way. */
+.work-arc {
+  --R: var(--side-r);
+  --bulge: var(--side-bulge);
+  --step: var(--side-step);
+  --base: var(--side-base);
+  --dir: var(--side-dir);
   position: fixed;
-  top: 156px;
-  right: 35px;
+  /* Its top star clears the close button (which ends at 140px). */
+  top: 250px;
+  right: calc(var(--bulge) - var(--R));
+  width: 0;
+  height: 0;
+  z-index: 62;
+  pointer-events: none;
+}
+.work-arc ol {
   margin: 0;
   padding: 0;
   list-style: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  z-index: 62;
-  pointer-events: none;
-  /* Wiped in from the right edge with the close button above it. */
-  clip-path: inset(-12px -12px -12px 100%);
-  transform: translateX(40px);
-  transition:
-    clip-path 0.25s var(--ease-soft),
-    transform 0.25s var(--ease-soft);
 }
-.work-portal-dots.is-open {
-  clip-path: inset(-12px);
-  transform: translateX(0);
+.work-arc li {
+  --a: calc(var(--base) + var(--dir) * (var(--i) - var(--mid)) * var(--step));
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* Out along the radius at its angle, then turned back upright. */
+  transform: rotate(var(--a)) translateX(var(--R)) rotate(calc(-1 * var(--a)));
 }
-.work-portal-dots li { list-style: none; }
-.work-portal-dot {
-  position: relative;
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: 0;
+.work-arc-star {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -50%;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
   padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
   color: inherit;
   cursor: none;
   pointer-events: none;
 }
-.work-portal-dots.is-open .work-portal-dot { pointer-events: auto; }
-.work-portal-dot-mark {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  /* A resting tone, mixed toward the page rather than made transparent. */
-  background: color-mix(in srgb, var(--ink) 45%, var(--bg));
-  transform: scale(1);
-  transition:
-    transform 0.4s var(--ease-soft),
-    background-color 0.25s ease;
-}
-.work-portal-dot-star {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  color: var(--accent);
+.work-arc.is-open .work-arc-star { pointer-events: auto; }
+.work-arc li.is-active .work-arc-star { cursor: none; }
+/* Sized by width/height, not scale, so a reveal measures it true. Hidden
+   until the arc opens; then each inks in down the line as it draws, and
+   back out when the page closes (WorkArc, lib/inkLabel.ts). The font size
+   sets how soft the ink starts. A star picked stays where it is and grows
+   to the open size. */
+.work-arc-star > svg {
   display: block;
-  /* Grows out of the dot's centre, turning as it opens, while the dot
-     shrinks away beneath it — a morph, not a cross-fade. */
-  transform: scale(0) rotate(-30deg);
+  width: 18px;
+  height: 18px;
+  overflow: visible;
+  font-size: 14px;
+  visibility: hidden;
   transition:
-    transform 0.4s var(--ease-soft),
-    color 0.25s ease;
+    width 0.45s var(--ease-soft),
+    height 0.45s var(--ease-soft);
 }
-.work-portal-dot:not(.is-active):hover .work-portal-dot-mark {
-  background: var(--ink);
+.work-arc li.is-active .work-arc-star > svg {
+  width: 30px;
+  height: 30px;
 }
-.work-portal-dot.is-active .work-portal-dot-mark {
-  transform: scale(0);
+/* Solid, in the work's own colour — the same on every page; only the line
+   takes the page's palette. */
+.work-arc-star path { fill: var(--c); }
+.work-arc-star:hover .cs-mark-star,
+.work-arc-star:focus-visible .cs-mark-star { rotate: 48deg; }
+.work-arc-star:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
-.work-portal-dot.is-active .work-portal-dot-star {
-  transform: scale(1) rotate(0deg);
+/* The line draws in along the arc as the page settles, and back out. */
+.work-arc-line {
+  position: absolute;
+  left: calc(-1 * var(--R));
+  top: calc(-1 * var(--R));
+  width: calc(2 * var(--R));
+  height: calc(2 * var(--R));
+  overflow: visible;
+  pointer-events: none;
 }
-.work-panel-content {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: clamp(24px, 4vw, 56px);
-  align-items: stretch;
-  max-width: 1280px;
-  margin: 0 auto;
-  width: 100%;
-  /* Fills the panel when short, but never shrinks below its content —
-     longer case studies push past the fold and the inner scrolls. */
-  flex: 1 0 auto;
+.work-arc-line path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink) 30%, var(--bg));
+  stroke-width: 1.2px;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  transition: stroke-dashoffset 0.35s var(--ease-soft);
 }
-.work-panel-text {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+/* Drawn from the top (or the left) at an even pace, so the eye follows it
+   down past each star as it inks in. */
+.work-arc.is-open .work-arc-line path {
+  stroke-dashoffset: 0;
+  transition-duration: 0.7s;
+  transition-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-.work-panel-title {
+.work-arc-line.is-foot { display: none; }
+/* A star's name, inked in beside it on hover or focus (lib/inkLabel.ts),
+   on a ground of the page so it reads over whatever scrolls beneath. Only
+   the text inks; the ground shows and hides with it. */
+.work-arc-name {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 4px);
+  translate: 0 -50%;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--bg);
   font-family: var(--display);
   font-weight: 500;
-  font-size: var(--fs-panel);
+  font-size: var(--fs-item);
   line-height: 1;
-  letter-spacing: -0.01em;
-  margin: 0 0 clamp(12px, 2vh, 24px);
+  white-space: nowrap;
   color: var(--ink);
+  visibility: hidden;
+  pointer-events: none;
 }
-.work-panel-blurb {
-  /* Body face, not display: DeFonte's lowercase i fuses its dot into the
-     stem and reads as an l in running text — fine in titles, wrong in a
-     sentence. Amiamie matches the contact note and panel body. */
-  font-family: var(--body);
-  font-weight: 400;
-  font-size: var(--body-text);
-  line-height: 1.45;
-  color: var(--ink);
-  margin: 0 0 clamp(10px, 1.5vh, 20px);
-  max-width: 44ch;
-}
-.work-panel-body {
-  font-family: var(--body);
-  font-size: var(--body-text);
-  line-height: 1.55;
-  color: var(--ink-soft);
-  margin: 0 0 clamp(14px, 2.4vh, 28px);
-  max-width: 52ch;
-}
-.work-panel-meta {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, auto));
-  gap: clamp(16px, 2.5vw, 32px);
-  margin: 0;
-  padding-top: clamp(12px, 1.8vh, 20px);
-  border-top: 1px solid var(--ink-faint);
-}
-.work-panel-meta dt {
-  font-family: var(--body);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  margin-bottom: 6px;
-}
-.work-panel-meta dd {
-  font-family: var(--body);
-  font-size: 13px;
-  color: var(--ink);
-  margin: 0;
-  line-height: 1.4;
-}
-.work-panel-media {
-  margin: 0;
-  height: 100%;
-  min-height: 0;
-  border-radius: 6px;
-  overflow: hidden;
-  box-shadow: 0 0 0 1px var(--ink-faint);
-}
-.work-panel-media img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.work-arc-name-ink { display: block; }
+.work-arc-ground { display: none; }
+/* Phones: the arc rises from the bottom edge instead, its stars across the
+   crest; the end of the case study clears it with its bottom padding. */
+@media (max-width: 900px) {
+  /* Up in the nav band, right of the centred links, where content never
+     scrolls beneath it. */
+  .work-panel-close { top: 12px; right: 8px; }
+  .work-arc {
+    --R: var(--foot-r);
+    --bulge: var(--foot-bulge);
+    --step: var(--foot-step);
+    --base: var(--foot-base);
+    --dir: var(--foot-dir);
+    top: auto;
+    right: auto;
+    left: 50%;
+    bottom: calc(var(--bulge) - var(--R));
+  }
+  .work-arc-line.is-side { display: none; }
+  .work-arc-line.is-foot { display: block; }
+  .work-arc-name { display: none; }
+  /* The ground under the arc (WorkArcGround), laid in each page over its
+     scroller, on the arc's circle. It rises with the arc and sinks with it. */
+  .work-arc-ground {
+    display: block;
+    position: absolute;
+    left: calc(50% - var(--R));
+    bottom: calc(var(--bulge) - 2 * var(--R));
+    width: calc(2 * var(--R));
+    height: calc(2 * var(--R));
+    z-index: 6;
+    overflow: visible;
+    pointer-events: none;
+    fill: var(--bg);
+    translate: 0 calc(var(--bulge) + 4px);
+    transition: translate 0.3s var(--ease-soft);
+  }
+  .work-panel.has-arc .work-arc-ground {
+    translate: 0 0;
+    transition-duration: 0.6s;
+  }
 }
 
 /* About -------------------------------------------------------------- */
@@ -2170,11 +2177,6 @@ footer {
     margin-bottom: 40px;
     padding-top: 100px;
   }
-  .work-panel { width: 100vw; }
-  .work-panel-inner { padding: 64px var(--gutter); }
-  .work-panel-content { grid-template-columns: 1fr; gap: 28px; }
-  .work-panel-meta { grid-template-columns: 1fr 1fr; gap: 20px; }
-  .work-panel-media { height: 36vh; }
   .about-body { --portrait-w: clamp(148px, 42vw, 220px); grid-template-columns: 1fr; gap: 40px; }
   .about-lead { max-width: none; }
   .about-bio { margin-top: 0; }

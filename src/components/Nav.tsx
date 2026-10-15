@@ -12,11 +12,13 @@ export default function Nav({ active }: NavProps) {
     e.preventDefault();
     const scroll = () =>
       document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    // If the works panel is open, close it first so the sideways slide-out
-    const panelOpen = document.querySelector('.work-panel.is-open');
-    if (panelOpen) {
+    // If a project page is up, let it shrink back into its star first: the
+    // page stays scroll-locked until the star has landed, so scrolling any
+    // sooner would move the star out from under it.
+    const panelUp = document.querySelector('.work-panel.is-up');
+    if (panelUp) {
+      window.addEventListener('works:closed', () => requestAnimationFrame(scroll), { once: true });
       window.dispatchEvent(new CustomEvent('works:close'));
-      window.setTimeout(scroll, 250);
     } else {
       scroll();
     }

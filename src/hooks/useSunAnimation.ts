@@ -1,4 +1,5 @@
 import { useLayoutEffect } from 'react';
+import { inkLabel } from '../lib/inkLabel';
 
 // Quadratic bezier: start → control → end. The control point sits above the
 // viewport so the curve arcs up and over like a sun crossing the sky, with no
@@ -118,6 +119,10 @@ const CLOSE_LEAD_VH = 0.35;
 // lives in CSS on .work-body-mark, driven by the same --in variable.)
 
 const SHELL_BASE = 100;
+
+// Where a work's label inks in as it opens, and where it inks back out.
+const LABEL_IN = 0.62;
+const LABEL_OUT = 0.45;
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -260,7 +265,7 @@ export function useSunAnimation() {
     const orbitBCache = { last: '' };
     const starACache  = { last: '' };
     const workCaches  = workBodies.map(() => ({
-      last: '', spin: '', bloom: '', focus: '', live: false,
+      last: '', spin: '', bloom: '', focus: '', live: false, label: false,
     }));
 
     const apply = (p: number, q: number) => {
@@ -383,6 +388,15 @@ export function useSunAnimation() {
         if (fNext !== cache.focus) {
           cache.focus = fNext;
           workBodies[i].style.setProperty('--focus', fNext);
+        }
+
+        // The label inks in once the body is mostly a work and back out as
+        // it folds; the gap between the two marks keeps it from flickering
+        // when a body rests right at one of them.
+        const labelOn = cache.label ? bloom > LABEL_OUT : bloom >= LABEL_IN;
+        if (labelOn !== cache.label) {
+          cache.label = labelOn;
+          inkLabel(workBodies[i], labelOn);
         }
 
         const next = bloom.toFixed(3);

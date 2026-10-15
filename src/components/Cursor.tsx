@@ -45,19 +45,19 @@ function parseColor(input: string): [number, number, number] | null {
 
 // The cursor uses mix-blend-mode: difference, so its rendered color over the
 // page bg is |source − bg|. To make the cursor APPEAR as `target` against
-// the bg, we set its source to `bg − target` (clamped). Over the bg this
-// resolves to the target color; over ink text it produces a contrasting tint
-// that keeps text shapes visible underneath rather than disappearing into a
-// same-color blob.
+// the bg, each channel of the source sits `target` away from the bg: below
+// it where the bg is the lighter of the two (light pages, dark ink), above
+// it where the target is lighter (a dark page's light ink). Subtracting
+// alone clamped every channel to black on a dark page, and black under
+// difference draws nothing. Over the bg this resolves to the target color;
+// over ink text it produces a contrasting tint that keeps text shapes
+// visible underneath rather than disappearing into a same-color blob.
 function preBlend(
   bg: [number,number,number],
   target: [number,number,number],
 ): [number,number,number] {
-  return [
-    Math.max(0, Math.min(255, bg[0] - target[0])),
-    Math.max(0, Math.min(255, bg[1] - target[1])),
-    Math.max(0, Math.min(255, bg[2] - target[2])),
-  ];
+  const channel = (b: number, t: number) => (b >= t ? b - t : Math.min(255, b + t));
+  return [channel(bg[0], target[0]), channel(bg[1], target[1]), channel(bg[2], target[2])];
 }
 
 export default function Cursor() {
@@ -71,12 +71,13 @@ export default function Cursor() {
       !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!canHover) return;
     setEnabled(true);
-    // The `cursor: none` rules in style.css are gated on this class, so the
-    // system cursor only disappears once the custom cursor is actually
-    // mounting. If this effect bails (reduced motion, coarse pointer) or JS
-    // never runs, the class never lands and the user keeps their native
-    // cursor instead of a blank page where the pointer should be.
-    document.documentElement.classList.add('cursor-custom');
+    // `cursor-custom` on <html> is the one switch between the two cursors:
+    // with it, style.css hides the system cursor and shows this one; without
+    // it, the reverse. It's only on while this cursor is confirmed under the
+    // pointer (see park/unpark), so at load, after coming back from another
+    // window or tab, and with the pointer outside the page, the system cursor
+    // is what shows — and if this effect bails or JS never runs, the class
+    // never lands at all. Nobody is left without a pointer.
 
     let mx = -200, my = -200;
     // Pill target rect — mutated in place each frame to avoid per-frame allocations.
@@ -85,8 +86,7 @@ export default function Cursor() {
     // 'nav' keeps cursor behind fixed nav (z-index 69 < nav 70)
     // 'email' uses z-index 5 so <main> content (z-index 10+) always paints on top
     // 'panel-close' sits above the work panel (z-index 60); SVG inside the button paints on top via its own stacking context
-    // 'work-dot' sits below the work-portal-dots container (z-index 62) so the dot mark/star paints over the pill
-    let pillKind: 'nav' | 'email' | 'panel-close' | 'work-dot' | null = null;
+    let pillKind: 'nav' | 'email' | 'panel-close' | null = null;
     // live reference to the hovered email element so we can re-read its rect each frame
     let hoveredEmail: HTMLElement | null = null;
 
@@ -292,7 +292,6 @@ export default function Cursor() {
         const z =
           pillKind === 'email' ? 5 :
           pillKind === 'panel-close' ? 61 :
-          pillKind === 'work-dot' ? 61 :
           ct > 0.5 ? 69 : 1000;
         if (z !== lastZ) {
           s.zIndex = `${z}`;
@@ -319,10 +318,50 @@ export default function Cursor() {
       }
     };
 
+    // Parked: the system cursor shows. That's the state at load and whenever
+    // this one's position is unknown — focus went to another app, the tab was
+    // hidden, the pointer left the page, a touch came in. The first real
+    // movement unparks it, right where the pointer is instead of gliding
+    // over from wherever it was left.
+    const fine = window.matchMedia('(hover: hover) and (pointer: fine)');
+    let parked = true;
+    const park = () => {
+      if (parked) return;
+      parked = true;
+      document.documentElement.classList.remove('cursor-custom');
+    };
+    const unpark = () => {
+      if (!parked) return;
+      parked = false;
+      if (!pillActive) {
+        const size = DOT_SIZE + (SCISSORS_SIZE - DOT_SIZE) * sc;
+        cx = mx - size / 2;
+        cy = my - size / 2;
+      }
+      // The tick that writes this position runs before the next paint, so the
+      // dot never shows at its old spot.
+      document.documentElement.classList.add('cursor-custom');
+    };
+
     const onMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch' || !fine.matches) {
+        park();
+        return;
+      }
       mx = e.clientX;
       my = e.clientY;
+      unpark();
       schedule();
+    };
+    const onOut = (e: MouseEvent) => {
+      // No related target: the pointer left the window (or went into a frame).
+      if (!e.relatedTarget) park();
+    };
+    const onVisibility = () => {
+      if (document.hidden) park();
+    };
+    const onFineChange = () => {
+      if (!fine.matches) park();
     };
 
     const onOver = (e: PointerEvent) => {
@@ -335,7 +374,7 @@ export default function Cursor() {
       // Resolve the closest interactive container in a single tree walk so we
       // don't run three separate .closest() calls per pointerover.
       const hit = el?.closest<HTMLElement>(
-        '.nav-links a, .contact-email, .work-panel-close, .work-portal-dot:not(.is-active)',
+        '.nav-links a, .contact-email, .work-panel-close',
       ) ?? null;
 
       if (!hit) {
@@ -353,17 +392,6 @@ export default function Cursor() {
         } else if (hit.classList.contains('contact-email')) {
           pillKind = 'email';
           hoveredEmail = hit;
-        } else if (hit.classList.contains('work-portal-dot')) {
-          pillKind = 'work-dot';
-          hoveredEmail = null;
-          // Snap the pill to the visible 7px mark, not the 22px hit zone, so
-          // the cursor merges into the dot itself instead of forming a halo.
-          const mark = hit.querySelector('.work-portal-dot-mark') as HTMLElement | null;
-          if (mark) {
-            const mr = mark.getBoundingClientRect();
-            pillRect.x = mr.left; pillRect.y = mr.top;
-            pillRect.w = mr.width; pillRect.h = mr.height;
-          }
         } else {
           pillKind = 'nav';
           hoveredEmail = null;
@@ -389,6 +417,10 @@ export default function Cursor() {
 
     window.addEventListener('pointermove', onMove, { passive: true });
     document.addEventListener('pointerover', onOver, { passive: true });
+    document.addEventListener('mouseout', onOut, { passive: true });
+    window.addEventListener('blur', park);
+    document.addEventListener('visibilitychange', onVisibility);
+    fine.addEventListener('change', onFineChange);
     window.addEventListener('scroll', recompute, { passive: true });
     window.addEventListener('resize', recompute, { passive: true });
     window.addEventListener('palette-change', onPalette);
@@ -397,6 +429,10 @@ export default function Cursor() {
       cancelAnimationFrame(raf);
       window.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerover', onOver);
+      document.removeEventListener('mouseout', onOut);
+      window.removeEventListener('blur', park);
+      document.removeEventListener('visibilitychange', onVisibility);
+      fine.removeEventListener('change', onFineChange);
       window.removeEventListener('scroll', recompute);
       window.removeEventListener('resize', recompute);
       window.removeEventListener('palette-change', onPalette);
