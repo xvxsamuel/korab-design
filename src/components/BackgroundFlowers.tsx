@@ -14,6 +14,9 @@ export type Flower = {
   // Original slot center, kept so a flower regrown after the cut easter egg
   // jitters around its assigned slot rather than drifting from previous leftPct.
   slot: number;
+  // The bed's outer edges, in %. A regrown flower's jitter stays inside them,
+  // so the outermost plants never drift toward the controls they flank.
+  bounds: [number, number];
   leftPct: number;
   stemVh: number;
   bloomAngle: number;
@@ -103,8 +106,14 @@ const stemProportion = (stemVh: number) =>
   Math.max(0, Math.min(1, (stemVh - MIN_STEM_VH) / (MAX_STEM_VH - MIN_STEM_VH)));
 const starSizeFor = (stemVh: number) => 42 + stemProportion(stemVh) * 36;
 
-function generateFlower(slot: number, jitter: number): Flower {
-  const stemVh = MIN_STEM_VH + Math.random() * (MAX_STEM_VH - MIN_STEM_VH);
+const randomStemVh = () => MIN_STEM_VH + Math.random() * (MAX_STEM_VH - MIN_STEM_VH);
+
+function generateFlower(
+  slot: number,
+  bounds: [number, number],
+  leftPct: number,
+  stemVh: number,
+): Flower {
   const norm = stemProportion(stemVh);
   // Tall flowers take longer to grow than short ones, with a small jitter
   // on top so equal-height stems don't animate in lockstep.
@@ -132,7 +141,8 @@ function generateFlower(slot: number, jitter: number): Flower {
   });
   return {
     slot,
-    leftPct: slot + (Math.random() * jitter * 2 - jitter),
+    bounds,
+    leftPct,
     stemVh,
     bloomAngle: (Math.random() - 0.5) * 36,
     grow,
@@ -140,13 +150,71 @@ function generateFlower(slot: number, jitter: number): Flower {
   };
 }
 
-export function generateFlowers(slotPositions: number[], jitter = 2): Flower[] {
-  const slots = [...slotPositions];
-  for (let i = slots.length - 1; i > 0; i--) {
+// A flower regrown after a felling cut: any height, and a spot anywhere
+// within `jitter` % of its slot, clipped to the bed.
+function regrowFlower(slot: number, bounds: [number, number], jitter: number): Flower {
+  const lo = Math.max(bounds[0], slot - jitter);
+  const hi = Math.min(bounds[1], slot + jitter);
+  return generateFlower(slot, bounds, lo + Math.random() * Math.max(0, hi - lo), randomStemVh());
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [slots[i], slots[j]] = [slots[j], slots[i]];
+    [out[i], out[j]] = [out[j], out[i]];
   }
-  return slots.map((slot) => generateFlower(slot, jitter));
+  return out;
+}
+
+// How unbalanced a left-to-right row of stem heights (0–1) looks; lower is
+// better. Neighbours should differ clearly, the skyline should zigzag rather
+// than climb in steps, and the row's weight (taller = heavier) should sit
+// near its middle.
+function imbalance(row: number[]): number {
+  const n = row.length;
+  let score = 0;
+  for (let i = 1; i < n; i++) {
+    score += Math.max(0, 0.3 - Math.abs(row[i] - row[i - 1])) * 4;
+  }
+  for (let i = 1; i < n - 1; i++) {
+    if ((row[i] - row[i - 1]) * (row[i + 1] - row[i]) > 0) score += 0.5;
+  }
+  let moment = 0;
+  let weight = 0;
+  row.forEach((t, i) => {
+    const w = 0.35 + t;
+    moment += ((i / (n - 1)) * 2 - 1) * w;
+    weight += w;
+  });
+  return score + Math.abs(moment / weight) * 3;
+}
+
+// Stem heights for a fresh bed, left to right. One height is drawn from each
+// of n equal bands of the range, so every bed has its tall, middling and
+// short flowers rather than whatever n straight draws land on. The order is
+// then one of the few best-balanced of a few hundred random shuffles, so the
+// bed differs on each visit but always sits well.
+function plantHeights(n: number): number[] {
+  const span = MAX_STEM_VH - MIN_STEM_VH;
+  const heights = Array.from(
+    { length: n },
+    (_, k) => MIN_STEM_VH + ((k + 0.2 + Math.random() * 0.6) / n) * span,
+  );
+  if (n < 3) return shuffle(heights);
+  const rows = Array.from({ length: 400 }, () => {
+    const row = shuffle(heights);
+    return { row, score: imbalance(row.map(stemProportion)) };
+  }).sort((a, b) => a.score - b.score);
+  return rows[Math.floor(Math.random() * 6)].row;
+}
+
+// The first planting: exactly on the given slots (sorted left to right), no
+// jitter, with balanced heights.
+export function generateFlowers(slots: number[], bounds: [number, number]): Flower[] {
+  const sorted = [...slots].sort((a, b) => a - b);
+  const heights = plantHeights(sorted.length);
+  return sorted.map((slot, i) => generateFlower(slot, bounds, slot, heights[i]));
 }
 
 let nextEntryId = 0;
@@ -417,7 +485,7 @@ export default function BackgroundFlowers({
         if (fell) {
           // A freshly randomised flower takes the slot once the top is down.
           schedule(id, CUT_DURATION_MS, () =>
-            update(id, seq, (e) => makeEntry(generateFlower(e.slot ?? e.leftPct, REGROW_JITTER))),
+            update(id, seq, (e) => makeEntry(regrowFlower(e.slot, e.bounds, REGROW_JITTER))),
           );
         } else if (!headOnly) {
           // The whole head is off: once the top has fallen, the plant grows

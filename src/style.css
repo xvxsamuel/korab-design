@@ -2027,7 +2027,7 @@ footer {
 }
 
 /* Right-side stack: clock + location, tip, and copyright. Meta is the
-   right-side flex item of the footer; computeSlots() reads its bounding
+   right-side flex item of the footer; computeBed() in Footer.tsx reads its bounding
    rect when distributing flowers so the whole stack is reserved. */
 .footer-meta {
   position: relative;

@@ -6,29 +6,31 @@ import BackgroundFlowers, { generateFlowers, type Flower } from './BackgroundFlo
 // the longest leaf, ~50px) plus the visual breathing room we want on top of
 // that, so a flower at the boundary slot still clears the controls.
 const CONTROL_BUFFER_PX = 88;
+// On a side with no control, the outermost stem sits this far inside the
+// footer's gutter: about a flower's half-width (bloom or leaf), so the bed
+// reaches the content edge without spilling past it.
+const EDGE_INSET_PX = 40;
+// Stem centers are spaced as close to this as the band allows, and never
+// closer than the minimum (two tall blooms would touch).
+const TARGET_GAP_PX = 160;
+const MIN_GAP_PX = 120;
 
-// Pick a flower count so the gap between adjacent stem centers stays in a
-// pleasant range (~140-180px) given the available horizontal band.
-function pickFlowerCount(rangePx: number): number {
-  if (rangePx < 130) return 1;
-  if (rangePx < 280) return 2;
-  if (rangePx < 480) return 3;
-  if (rangePx < 680) return 4;
-  return 5;
-}
+type Bed = { slots: number[]; bounds: [number, number] };
 
 // Measure the back-to-top button and copyright relative to the footer, then
-// distribute flower slots evenly across the horizontal range left over after
-// reserving CONTROL_BUFFER_PX on either side of any control. Each control
-// classifies as left- or right-side by which half of the footer its center
-// lands in, which works for both the row layout (controls at edges) and the
-// small-screen column stack (both controls on the left).
-function computeSlots(footer: HTMLElement): number[] {
+// space flower slots evenly across the band left over after reserving
+// CONTROL_BUFFER_PX beside any control — edge to edge, so the outermost
+// flowers stand right at the band's ends and the bed always spans it fully.
+// Each control classifies as left- or right-side by which half of the footer
+// its center lands in, which works for both the row layout (controls at
+// edges) and the small-screen column stack (both controls on the left).
+function computeBed(footer: HTMLElement): Bed {
   const fr = footer.getBoundingClientRect();
-  if (fr.width === 0) return [];
+  if (fr.width === 0) return { slots: [], bounds: [0, 0] };
 
-  let leftPx = 0;
-  let rightPx = fr.width;
+  const cs = getComputedStyle(footer);
+  let leftPx = parseFloat(cs.paddingLeft) + EDGE_INSET_PX;
+  let rightPx = fr.width - parseFloat(cs.paddingRight) - EDGE_INSET_PX;
   const fCenter = fr.width / 2;
 
   const controls = [
@@ -46,25 +48,24 @@ function computeSlots(footer: HTMLElement): number[] {
     const localRight = r.right - fr.left;
     const center = (localLeft + localRight) / 2;
     if (center < fCenter) {
-      leftPx = Math.max(leftPx, localRight);
+      leftPx = Math.max(leftPx, localRight + CONTROL_BUFFER_PX);
     } else {
-      rightPx = Math.min(rightPx, localLeft);
+      rightPx = Math.min(rightPx, localLeft - CONTROL_BUFFER_PX);
     }
   }
 
-  leftPx += CONTROL_BUFFER_PX;
-  rightPx -= CONTROL_BUFFER_PX;
-
   const rangePx = rightPx - leftPx;
-  if (rangePx < 80) return [];
+  const pct = (px: number) => (px / fr.width) * 100;
+  if (rangePx < 0) return { slots: [], bounds: [0, 0] };
 
-  const count = pickFlowerCount(rangePx);
-  const slots: number[] = [];
-  for (let i = 0; i < count; i++) {
-    const px = leftPx + (rangePx * (i + 0.5)) / count;
-    slots.push((px / fr.width) * 100);
-  }
-  return slots;
+  let gaps = Math.max(1, Math.round(rangePx / TARGET_GAP_PX));
+  if (rangePx / gaps < MIN_GAP_PX) gaps -= 1;
+  // Too narrow for two: one flower, centered.
+  const slots =
+    gaps === 0
+      ? [pct(leftPx + rangePx / 2)]
+      : Array.from({ length: gaps + 1 }, (_, i) => pct(leftPx + (rangePx * i) / gaps));
+  return { slots, bounds: [pct(leftPx), pct(rightPx)] };
 }
 
 // Local-time clock in the Europe/Amsterdam zone (covers The Hague). Returns
@@ -95,7 +96,8 @@ export default function Footer() {
   useLayoutEffect(() => {
     const update = () => {
       if (!ref.current) return;
-      setFlowers(generateFlowers(computeSlots(ref.current), 3));
+      const bed = computeBed(ref.current);
+      setFlowers(generateFlowers(bed.slots, bed.bounds));
     };
 
     update();
@@ -108,7 +110,7 @@ export default function Footer() {
     window.addEventListener('resize', onResize);
     // Also re-slot when the footer ITSELF changes size — a window-resize
     // listener alone left a trap: if the one-shot update() ran while the
-    // footer measured zero (mid-reflow, mid-HMR), computeSlots returned []
+    // footer measured zero (mid-reflow, mid-HMR), computeBed returned no slots
     // and the bed stayed empty until a window resize happened to fire.
     const ro = new ResizeObserver(onResize);
     if (ref.current) ro.observe(ref.current);
